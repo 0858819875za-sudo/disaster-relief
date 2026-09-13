@@ -1,0 +1,25 @@
+// หน่วยถูกบันทึกเป็นภาษาไทยในฐานข้อมูล — ตอนเลือกภาษาอังกฤษให้แปลงหน่วยที่รู้จัก
+// หน่วยที่ไม่อยู่ในรายการแสดงตามที่บันทึกไว้
+const UNIT_EN: Record<string, string> = {
+  'ชิ้น': 'pcs',
+  'กล่อง': 'boxes',
+  'ถุง': 'bags',
+  'แพ็ค': 'packs',
+  'ขวด': 'bottles',
+  'กระป๋อง': 'cans',
+  'ลัง': 'cases',
+  'ชุด': 'sets',
+  'ห่อ': 'packets',
+  'ผืน': 'pieces',
+  'แผง': 'strips',
+  'หลอด': 'tubes',
+  'ซอง': 'sachets',
+  'กิโลกรัม': 'kg',
+  'กก.': 'kg',
+  'ลิตร': 'L',
+}
+
+export function unitLabel(unit: string | null | undefined, locale: string) {
+  const u = (unit ?? '').trim()
+  return locale === 'en' ? (UNIT_EN[u] ?? u) : u
+}
