@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireStaffOrAdmin } from '@/lib/guard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { sortByUrgency } from '@/lib/urgency'
 
 export default async function RequestsPage() {
   const supabase = await createClient()
@@ -35,13 +36,13 @@ export default async function RequestsPage() {
     cancelled: dict.requests.statusCancelled,
   }
 
-  const { data: requests } = await supabase
+  const { data: requestRows } = await supabase
     .from('requests')
     .select(
       'id, item_name, category, quantity_requested, quantity_fulfilled, urgency, status, created_at, centers(name)',
     )
-    .order('urgency', { ascending: false })
     .order('created_at', { ascending: false })
+  const requests = requestRows ? sortByUrgency(requestRows) : null
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">

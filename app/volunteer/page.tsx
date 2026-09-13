@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server'
 import { confirmReceipt } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { sortByUrgency } from '@/lib/urgency'
 
 export default async function VolunteerPage({
   searchParams,
@@ -57,14 +58,13 @@ export default async function VolunteerPage({
 
   const center = profile.centers as unknown as { name?: string; type?: string } | null
 
-  const [{ data: requests }, { data: pending }] = await Promise.all([
+  const [{ data: requestRows }, { data: pending }] = await Promise.all([
     profile.center_id
       ? supabase
           .from('requests')
           .select('id, item_name, category, quantity_requested, quantity_fulfilled, urgency, status')
           .neq('status', 'fulfilled')
           .neq('status', 'cancelled')
-          .order('urgency', { ascending: false })
       : Promise.resolve({ data: [] }),
     profile.center_id
       ? supabase
@@ -74,6 +74,7 @@ export default async function VolunteerPage({
           .eq('requests.center_id', profile.center_id)
       : Promise.resolve({ data: [] }),
   ])
+  const requests = requestRows ? sortByUrgency([...requestRows]) : null
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">

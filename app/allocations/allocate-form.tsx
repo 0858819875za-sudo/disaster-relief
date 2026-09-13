@@ -6,6 +6,10 @@
 //
 // ใช้ <dialog> ของ HTML ล้วนๆ (ไม่ใช้ library) — ได้ focus trap +
 // ปิดด้วย Esc + backdrop ฟรีจากเบราว์เซอร์
+//
+// ตัวเลือกล็อตกรองให้เหลือเฉพาะที่ใช้ได้กับคำขอที่เลือก (หมวดหมู่ตรง,
+// staff เห็นเฉพาะศูนย์เดียวกับคำขอ) และหน้า page.tsx ตัดล็อตที่หมดอายุ
+// ออกแล้ว — กฎจริงยังบังคับซ้ำใน allocate_items อีกชั้น
 // =====================================================================
 
 'use client'
@@ -16,6 +20,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries'
 
 type Req = {
   id: string
+  center_id: string
   item_name: string
   category: string
   quantity_requested: number
@@ -24,21 +29,32 @@ type Req = {
 }
 type Don = {
   id: string
+  center_id: string
   item_name: string
+  category: string
   unit: string
   quantity_remaining: number
   expiry_date: string | null
   centers: { name?: string } | null
 }
 
+const DAY_MS = 1000 * 60 * 60 * 24
+
+// อยู่นอก component เพราะอ่านเวลาปัจจุบัน — เรียกเฉพาะใน event handler
+function daysUntil(dateStr: string) {
+  return (new Date(dateStr).getTime() - Date.now()) / DAY_MS
+}
+
 export function AllocateForm({
   requests,
   donations,
   dict,
+  isAdmin,
 }: {
   requests: Req[]
   donations: Don[]
   dict: Dictionary
+  isAdmin: boolean
 }) {
   const formRef = useRef<HTMLFormElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -59,29 +75,62 @@ export function AllocateForm({
   const [nearExpiry, setNearExpiry] = useState(false)
 
   const selectedRequest = requests.find((r) => r.id === requestId)
-  const selectedDonation = donations.find((d) => d.id === donationId)
+  // ล็อตที่ใช้ได้: หมวดหมู่ตรงกับคำขอ และถ้าไม่ใช่ admin ต้องอยู่ศูนย์เดียวกับคำขอ
+  const lotOptions = selectedRequest
+    ? donations.filter(
+        (d) =>
+          d.category === selectedRequest.category &&
+          (isAdmin || d.center_id === selectedRequest.center_id),
+      )
+    : []
+  const selectedDonation = lotOptions.find((d) => d.id === donationId)
   const qty = Number(quantity) || 0
+  const requestRemaining = selectedRequest
+    ? selectedRequest.quantity_requested - selectedRequest.quantity_fulfilled
+    : 0
   const remainingAfter = selectedDonation ? selectedDonation.quantity_remaining - qty : null
+
+  const problem =
+    !selectedRequest || !selectedDonation
+      ? null
+      : qty <= 0
+        ? dict.allocations.invalidQty
+        : qty > selectedDonation.quantity_remaining
+          ? dict.allocations.overRemaining
+          : qty > requestRemaining
+            ? dict.allocations.overRequested
+            : null
 
   function handleSubmit(e: React.FormEvent) {
     if (confirmedRef.current) return // ผ่านมาจากปุ่ม "ยืนยัน" ในโมดัลแล้ว ปล่อยให้ submit จริง
     e.preventDefault()
-    if (!requestId || !donationId || !qty) return
-    setNearExpiry(
-      !!selectedDonation?.expiry_date &&
-        new Date(selectedDonation.expiry_date).getTime() - Date.now() < 1000 * 60 * 60 * 24 * 7,
-    )
+    if (!selectedRequest || !selectedDonation) return
+    const daysLeft = selectedDonation.expiry_date ? daysUntil(selectedDonation.expiry_date) : null
+    setNearExpiry(daysLeft !== null && daysLeft >= -1 && daysLeft <= 7)
     dialogRef.current?.showModal()
   }
 
   function handleConfirm() {
+    if (problem) return
     confirmedRef.current = true
     dialogRef.current?.close()
     formRef.current?.requestSubmit()
   }
 
+  const lotPlaceholder = !selectedRequest
+    ? dict.allocations.selectRequestFirst
+    : lotOptions.length === 0
+      ? dict.allocations.noMatchingLots
+      : dict.allocations.selectLotPlaceholder
+
   return (
     <>
+      {!isAdmin && (
+        <p className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {dict.allocations.crossCenterNote}
+        </p>
+      )}
+
       <form
         ref={formRef}
         action={allocate}
@@ -94,7 +143,10 @@ export function AllocateForm({
             name="request_id"
             required
             value={requestId}
-            onChange={(e) => setRequestId(e.target.value)}
+            onChange={(e) => {
+              setRequestId(e.target.value)
+              setDonationId('')
+            }}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           >
             <option value="">{dict.allocations.selectRequestPlaceholder}</option>
@@ -111,12 +163,13 @@ export function AllocateForm({
           <select
             name="donation_id"
             required
+            disabled={!selectedRequest || lotOptions.length === 0}
             value={donationId}
             onChange={(e) => setDonationId(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           >
-            <option value="">{dict.allocations.selectLotPlaceholder}</option>
-            {donations.map((d) => (
+            <option value="">{lotPlaceholder}</option>
+            {lotOptions.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.centers?.name} — {d.item_name} {dict.allocations.remainingInLot} {d.quantity_remaining} {d.unit}
                 {d.expiry_date ? ` (${dict.allocations.expiresOn} ${d.expiry_date})` : ''}
@@ -130,6 +183,7 @@ export function AllocateForm({
             name="quantity"
             type="number"
             min={1}
+            max={selectedDonation ? Math.min(selectedDonation.quantity_remaining, requestRemaining) : undefined}
             required
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -193,9 +247,15 @@ export function AllocateForm({
             </div>
           </dl>
 
-          {nearExpiry && (
+          {nearExpiry && !problem && (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
               {dict.allocations.nearExpiryWarning}
+            </p>
+          )}
+
+          {problem && (
+            <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-400">
+              {problem}
             </p>
           )}
 
@@ -210,7 +270,8 @@ export function AllocateForm({
             <button
               type="button"
               onClick={handleConfirm}
-              className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-deep"
+              disabled={!!problem}
+              className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {dict.allocations.confirmAllocate}
             </button>
