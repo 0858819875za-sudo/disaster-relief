@@ -20,6 +20,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
 import { SuccessDialog, type AllocationSummary } from './success-dialog'
 import { ErrorDialog } from './error-dialog'
+import { unitLabel } from '@/lib/units'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -51,7 +52,7 @@ export default async function AllocationsPage({
     // FEFO: ใกล้หมดอายุก่อน และตัดล็อตที่หมดอายุแล้วออกตั้งแต่ตอนดึง
     supabase
       .from('donations')
-      .select('id, center_id, item_name, category, unit, quantity_remaining, expiry_date, centers(name)')
+      .select('id, center_id, item_name, category, unit, quantity_remaining, expiry_date, received_at, centers(name)')
       .gt('quantity_remaining', 0)
       .or(`expiry_date.is.null,expiry_date.gte.${todayIso()}`)
       .order('expiry_date', { ascending: true, nullsFirst: false }),
@@ -99,7 +100,7 @@ export default async function AllocationsPage({
           return {
             fromCenter: don?.centers?.name ?? '—',
             quantity: row.quantity_allocated,
-            unit: don?.unit ?? '',
+            unit: unitLabel(don?.unit, locale),
             lotRemaining: don?.quantity_remaining ?? 0,
           }
         }),
@@ -140,9 +141,14 @@ export default async function AllocationsPage({
 
       {summary && <SuccessDialog key={done} summary={summary} dict={dict} />}
 
+      {/* remount ฟอร์มหลังจัดสรรสำเร็จ — Next เก็บ state ของ client component ไว้ตอน
+          redirect กลับหน้าเดิม ถ้าไม่ remount คำขอที่เพิ่งจัดสรรจะค้างอยู่ในฟอร์ม
+          (ตอน error ไม่ remount เพื่อให้ผู้ใช้แก้ตัวเลขเดิมต่อได้) */}
       <AllocateForm
+        key={done ?? 'allocate-form'}
         dict={dict}
         isAdmin={isAdmin}
+        locale={locale}
         requests={requests.map((r) => ({
           ...r,
           centers: r.centers as unknown as { name?: string } | null,

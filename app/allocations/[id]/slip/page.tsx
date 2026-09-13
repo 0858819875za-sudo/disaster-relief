@@ -10,6 +10,7 @@ import { requireStaffOrAdmin } from '@/lib/guard'
 import { PrintButton } from '@/app/donations/[id]/receipt/print-button'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { unitLabel } from '@/lib/units'
 
 export default async function AllocationSlipPage({
   params,
@@ -42,7 +43,9 @@ export default async function AllocationSlipPage({
 
   const dateLocale = locale === 'th' ? 'th-TH' : 'en-GB'
   const formatDate = (value: string | null) =>
-    value ? new Date(value).toLocaleString(dateLocale, { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+    value
+      ? new Date(value).toLocaleString(dateLocale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' })
+      : '—'
 
   const STATUS_LABEL: Record<string, string> = {
     allocated: dict.allocations.statusAllocated,
@@ -53,7 +56,7 @@ export default async function AllocationSlipPage({
     [dict.allocations.slipNo, allocation.id.slice(0, 8).toUpperCase()],
     [dict.allocations.allocatedAt, formatDate(allocation.allocated_at)],
     [dict.allocations.item, req?.item_name ?? don?.item_name ?? '—'],
-    [dict.form.quantity, `${allocation.quantity_allocated} ${don?.unit ?? ''}`],
+    [dict.form.quantity, `${allocation.quantity_allocated} ${unitLabel(don?.unit, locale)}`],
     [dict.table.expiryDate, don?.expiry_date ?? '—'],
     [dict.allocations.sourceCenter, don?.centers?.name ?? '—'],
     [dict.allocations.receivingCenter, req?.centers?.name ?? '—'],

@@ -14,6 +14,7 @@ import { ErrorDialog } from '../error-dialog'
 import { PageHeader } from '../../page-header'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { unitLabel } from '@/lib/units'
 
 // สีป้ายสถานะ — ให้ความหมายตรงกันทั้งเว็บ: ฟ้า=กำลังดำเนินการ,
 // เขียว=จบสมบูรณ์, แดง=ยกเลิก (ชุดสีเดียวกับที่ F2 ใช้ในตารางของบริจาค)
@@ -56,6 +57,8 @@ export default async function AllocationHistoryPage({
       ? new Date(value).toLocaleString(locale === 'th' ? 'th-TH' : 'en-GB', {
           dateStyle: 'medium',
           timeStyle: 'short',
+          // server (Vercel) รันเป็น UTC — ต้องระบุเขตเวลาไม่งั้นเวลาคลาดไป 7 ชั่วโมง
+          timeZone: 'Asia/Bangkok',
         })
       : '—'
 
@@ -64,16 +67,20 @@ export default async function AllocationHistoryPage({
   // ตัวกรองศูนย์มีเฉพาะ admin — staff เห็นแค่ศูนย์ตัวเองตาม RLS อยู่แล้ว
   const center = isAdmin && UUID_RE.test(params.center ?? '') ? params.center! : ''
 
+  // ใช้ !inner เฉพาะตอนกรองศูนย์ — ถ้าใช้ตลอด staff ศูนย์ต้นทางจะมองไม่เห็นรายการ
+  // ที่ส่งไปศูนย์อื่น (RLS ของ requests ซ่อนคำขอศูนย์อื่น แล้ว inner join ตัดแถวทิ้ง)
+  const requestEmbed = center ? 'requests!inner' : 'requests'
   let query = supabase
     .from('allocations')
     .select(
-      'id, quantity_allocated, status, allocated_at, delivered_at, cancel_reason, allocated_by_name, cancelled_by_name, requests!inner(item_name, center_id, centers(name)), donations(item_name, unit, centers(name))',
+      `id, quantity_allocated, status, allocated_at, delivered_at, cancel_reason, allocated_by_name, cancelled_by_name, ${requestEmbed}(item_name, center_id, centers(name)), donations(item_name, unit, centers(name))`,
     )
     .order('allocated_at', { ascending: false })
   if (status) query = query.eq('status', status)
   if (center) query = query.eq('requests.center_id', center)
-  if (from) query = query.gte('allocated_at', `${from}T00:00:00`)
-  if (to) query = query.lte('allocated_at', `${to}T23:59:59.999`)
+  // วันที่ในตัวกรองเป็นวันตามเวลาไทย
+  if (from) query = query.gte('allocated_at', `${from}T00:00:00+07:00`)
+  if (to) query = query.lte('allocated_at', `${to}T23:59:59.999+07:00`)
 
   const [{ data: allocations }, { data: centers }] = await Promise.all([
     query,
@@ -210,7 +217,7 @@ export default async function AllocationHistoryPage({
                       {req?.item_name ?? don?.item_name ?? '—'}
                     </td>
                     <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-                      {a.quantity_allocated} {don?.unit}
+                      {a.quantity_allocated} {unitLabel(don?.unit, locale)}
                     </td>
                     <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{don?.centers?.name ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{req?.centers?.name ?? '—'}</td>
