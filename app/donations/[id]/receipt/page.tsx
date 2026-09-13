@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PrintButton } from './print-button'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { unitLabel } from '@/lib/units'
 
 export default async function ReceiptPage({
   params,
@@ -17,7 +18,7 @@ export default async function ReceiptPage({
   const { data: donation } = await supabase
     .from('donations')
     .select(
-      'item_name, category, unit, quantity_received, expiry_date, received_at, donors(name, phone), centers(name), profiles(full_name)',
+      'item_name, category, unit, quantity_received, expiry_date, received_at, donors(name, phone), centers(name), profiles(full_name, username)',
     )
     .eq('id', id)
     .single()
@@ -26,7 +27,7 @@ export default async function ReceiptPage({
 
   const donor = donation.donors as unknown as { name?: string; phone?: string } | null
   const center = donation.centers as unknown as { name?: string } | null
-  const receiver = donation.profiles as unknown as { full_name?: string } | null
+  const receiver = donation.profiles as unknown as { full_name?: string; username?: string } | null
 
   return (
     <main className="mx-auto w-full max-w-lg px-6 py-12 print:py-0">
@@ -46,7 +47,7 @@ export default async function ReceiptPage({
           <div className="flex justify-between">
             <dt className="text-slate-500 dark:text-slate-400">{dict.form.quantity}</dt>
             <dd className="text-slate-900 dark:text-slate-100">
-              {donation.quantity_received} {donation.unit}
+              {donation.quantity_received} {unitLabel(donation.unit, locale)}
             </dd>
           </div>
           <div className="flex justify-between">
@@ -56,12 +57,15 @@ export default async function ReceiptPage({
           <div className="flex justify-between">
             <dt className="text-slate-500 dark:text-slate-400">{dict.receipt.receivedDate}</dt>
             <dd className="text-slate-900 dark:text-slate-100">
-              {new Date(donation.received_at).toLocaleDateString(locale === 'en' ? 'en-US' : 'th-TH')}
+              {new Date(donation.received_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'th-TH', {
+                dateStyle: 'medium',
+                timeZone: 'Asia/Bangkok',
+              })}
             </dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-slate-500 dark:text-slate-400">{dict.receipt.receivedBy}</dt>
-            <dd className="text-slate-900 dark:text-slate-100">{receiver?.full_name || '—'}</dd>
+            <dd className="text-slate-900 dark:text-slate-100">{receiver?.full_name || receiver?.username || '—'}</dd>
           </div>
         </dl>
 

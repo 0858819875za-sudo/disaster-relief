@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { findOrCreateDonor } from '@/lib/supabase/find-or-create-donor'
+import { resolveCenterId } from '@/lib/center-choice'
+import { getLocale } from '@/lib/i18n/locale'
+import { getDictionary } from '@/lib/i18n/dictionaries'
 
 export async function createDonation(formData: FormData) {
   const supabase = await createClient()
@@ -12,17 +15,10 @@ export async function createDonation(formData: FormData) {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('center_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.center_id) {
-    redirect(
-      '/donations/new?error=' +
-        encodeURIComponent('บัญชีนี้ยังไม่ได้ผูกกับศูนย์ ให้ admin ตั้งค่าก่อน'),
-    )
+  const centerId = await resolveCenterId(supabase, user.id, formData)
+  if (!centerId) {
+    const dict = getDictionary(await getLocale())
+    redirect('/donations/new?error=' + encodeURIComponent(dict.common.noCenter))
   }
 
   const donorName = String(formData.get('donor_name') || '').trim()
@@ -31,7 +27,7 @@ export async function createDonation(formData: FormData) {
   const quantity = Number(formData.get('quantity_received'))
 
   const { error } = await supabase.from('donations').insert({
-    center_id: profile.center_id,
+    center_id: centerId,
     donor_id: donorId,
     item_name: String(formData.get('item_name')),
     category: String(formData.get('category')),

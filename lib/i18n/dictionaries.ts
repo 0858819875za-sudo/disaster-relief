@@ -24,6 +24,9 @@ const th = {
     themeToggleToDark: 'สลับเป็นโหมดมืด',
     themeToggleToLight: 'สลับเป็นโหมดสว่าง',
     backHome: 'กลับหน้าหลัก',
+    center: 'ศูนย์',
+    selectCenter: '— เลือกศูนย์ —',
+    noCenter: 'บัญชีนี้ยังไม่ได้ผูกกับศูนย์ — ให้ admin ตั้งค่าศูนย์ หรือเลือกศูนย์ก่อนบันทึก',
   },
   nav: {
     home: 'หน้าหลัก',
@@ -435,6 +438,9 @@ const en: typeof th = {
     themeToggleToDark: 'Switch to dark mode',
     themeToggleToLight: 'Switch to light mode',
     backHome: 'Back to home',
+    center: 'Center',
+    selectCenter: '— Select a center —',
+    noCenter: 'This account is not linked to a center — ask an admin to set one, or choose a center before saving',
   },
   nav: {
     home: 'Home',

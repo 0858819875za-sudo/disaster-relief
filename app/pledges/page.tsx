@@ -7,6 +7,8 @@ import { requireStaffOrAdmin } from '@/lib/guard'
 import { confirmPledge, dismissPledge } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { getCenterPicker } from '@/lib/center-choice'
+import { CenterSelect } from '@/app/center-select'
 
 export default async function PledgesPage({
   searchParams,
@@ -38,6 +40,9 @@ export default async function PledgesPage({
     .from('donation_pledges')
     .select('*')
     .order('created_at', { ascending: false })
+
+  // admin ที่ไม่มีศูนย์ต้องเลือกศูนย์รับบริจาคก่อนยืนยัน (ของจะเข้าคลังศูนย์นั้น)
+  const centers = await getCenterPicker(supabase, 'warehouse')
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-12">
@@ -86,8 +91,16 @@ export default async function PledgesPage({
                   <td className="px-4 py-2">
                     {p.status === 'pending' && (
                       <div className="flex gap-2">
-                        <form action={confirmPledge}>
+                        <form action={confirmPledge} className="flex items-center gap-2">
                           <input type="hidden" name="id" value={p.id} />
+                          {centers && (
+                            <CenterSelect
+                              centers={centers}
+                              label={dict.common.center}
+                              placeholder={dict.common.selectCenter}
+                              compact
+                            />
+                          )}
                           <button
                             type="submit"
                             className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"

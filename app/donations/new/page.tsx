@@ -1,6 +1,9 @@
 import { createDonation } from '../actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { createClient } from '@/lib/supabase/server'
+import { getCenterPicker } from '@/lib/center-choice'
+import { CenterSelect } from '@/app/center-select'
 
 export default async function NewDonationPage({
   searchParams,
@@ -10,6 +13,7 @@ export default async function NewDonationPage({
   const { error } = await searchParams
   const locale = await getLocale()
   const dict = getDictionary(locale)
+  const centers = await getCenterPicker(await createClient(), 'warehouse')
 
   return (
     <main className="mx-auto w-full max-w-lg px-6 py-12">
@@ -25,6 +29,9 @@ export default async function NewDonationPage({
         action={createDonation}
         className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
       >
+        {centers && (
+          <CenterSelect centers={centers} label={dict.common.center} placeholder={dict.common.selectCenter} />
+        )}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{dict.table.itemName}</label>
           <input
