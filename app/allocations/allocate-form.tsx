@@ -174,7 +174,10 @@ export function AllocateForm({
     if (!canConfirm) return
     confirmedRef.current = true
     dialogRef.current?.close()
+    // requestSubmit ยิง submit event แบบ synchronous — handleSubmit เห็นค่า true ไปแล้ว
+    // จึงรีเซ็ตทันที ไม่งั้นถ้า action ตอบ error กลับมาหน้าเดิม รอบถัดไปจะข้าม Modal
     formRef.current?.requestSubmit()
+    confirmedRef.current = false
   }
 
   const dateLocale = locale === 'th' ? 'th-TH' : 'en-GB'

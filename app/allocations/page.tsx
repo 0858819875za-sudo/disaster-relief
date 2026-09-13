@@ -141,10 +141,11 @@ export default async function AllocationsPage({
 
       {summary && <SuccessDialog key={done} summary={summary} dict={dict} />}
 
-      {/* key ผูกกับผลลัพธ์ล่าสุด — หลัง redirect กลับมาหน้าเดิม Next เก็บ state ของ
-          client component ไว้ ถ้าไม่ remount ฟอร์มจะค้างคำขอเก่าและข้าม Modal รอบถัดไป */}
+      {/* remount ฟอร์มหลังจัดสรรสำเร็จ — Next เก็บ state ของ client component ไว้ตอน
+          redirect กลับหน้าเดิม ถ้าไม่ remount คำขอที่เพิ่งจัดสรรจะค้างอยู่ในฟอร์ม
+          (ตอน error ไม่ remount เพื่อให้ผู้ใช้แก้ตัวเลขเดิมต่อได้) */}
       <AllocateForm
-        key={`${done ?? ''}|${error ?? ''}`}
+        key={done ?? 'allocate-form'}
         dict={dict}
         isAdmin={isAdmin}
         locale={locale}
