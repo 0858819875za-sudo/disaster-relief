@@ -21,6 +21,24 @@ import { NextResponse, type NextRequest } from 'next/server'
 // /help-request = ฟอร์มสาธารณะขอความช่วยเหลือ (docs/sql/12_public_help_requests.sql)
 const PUBLIC_PATHS = ['/', '/login', '/register', '/pledge', '/help-request']
 
+// หน้าที่ต้อง login — path ที่ไม่อยู่ทั้งสองรายการ (เช่นพิมพ์ URL ผิด) ปล่อยผ่าน
+// ให้ Next แสดงหน้า 404 แทนการเด้งไป /login ที่ทำให้ผู้ใช้งงว่าหน้ามีอยู่จริง
+// ⚠️ เพิ่มหน้าใหม่ที่ต้อง login ต้องเพิ่ม prefix ตรงนี้ด้วย
+const PROTECTED_PATHS = [
+  '/admin',
+  '/allocations',
+  '/donations',
+  '/donors',
+  '/help-requests',
+  '/inventory',
+  '/pledges',
+  '/requests',
+  '/volunteer',
+]
+
+const matches = (path: string, list: string[]) =>
+  list.some((p) => path === p || path.startsWith(p + '/'))
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -57,12 +75,10 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => path === p || path.startsWith(p + '/'),
-  )
+  const isProtected = !matches(path, PUBLIC_PATHS) && matches(path, PROTECTED_PATHS)
 
   // ยังไม่ล็อกอิน แต่พยายามเข้าหน้าที่ต้องล็อกอิน → ส่งไปหน้า login
-  if (!user && !isPublic) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

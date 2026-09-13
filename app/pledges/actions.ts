@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { findOrCreateDonor } from '@/lib/supabase/find-or-create-donor'
+import { resolveCenterId } from '@/lib/center-choice'
+import { getLocale } from '@/lib/i18n/locale'
+import { getDictionary } from '@/lib/i18n/dictionaries'
 
 // ยืนยันคำร้อง = สร้างผู้บริจาค + ล็อตของบริจาคจริง แล้วผูก converted_donation_id
 // ไว้ย้อนดูได้ ตรงกับความสัมพันธ์ "แปลงเป็น" ใน ER diagram
@@ -24,16 +27,10 @@ export async function confirmPledge(formData: FormData) {
 
   if (!pledge) redirect('/pledges?error=' + encodeURIComponent('ไม่พบคำร้องนี้'))
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('center_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.center_id) {
-    redirect(
-      '/pledges?error=' + encodeURIComponent('บัญชีนี้ยังไม่ได้ผูกกับศูนย์ ให้ admin ตั้งค่าก่อน'),
-    )
+  const centerId = await resolveCenterId(supabase, user.id, formData)
+  if (!centerId) {
+    const dict = getDictionary(await getLocale())
+    redirect('/pledges?error=' + encodeURIComponent(dict.common.noCenter))
   }
 
   const donorId = await findOrCreateDonor(supabase, {
@@ -45,7 +42,7 @@ export async function confirmPledge(formData: FormData) {
   const { data: donation, error: donationError } = await supabase
     .from('donations')
     .insert({
-      center_id: profile.center_id,
+      center_id: centerId,
       donor_id: donorId,
       item_name: pledge.item_name,
       category: pledge.category,

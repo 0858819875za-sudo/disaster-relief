@@ -39,7 +39,7 @@ export default async function AdminCentersPage({
     supabase.from('centers').select('*').order('name'),
     supabase
       .from('profiles')
-      .select('id, full_name, role, center_id, centers(name)')
+      .select('id, full_name, username, role, center_id, centers(name)')
       .order('full_name'),
   ])
 
@@ -135,7 +135,10 @@ export default async function AdminCentersPage({
             <tbody>
               {(users ?? []).map((u) => (
                 <tr key={u.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                  <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{u.full_name || '—'}</td>
+                  <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
+                    {/* บัญชีที่สร้างจาก Dashboard ไม่มี full_name — ใช้ username แทนให้แยกได้ว่าใครเป็นใคร */}
+                    {u.full_name || u.username || '—'}
+                  </td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{u.role}</td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
                     {(u.centers as unknown as { name?: string } | null)?.name ?? '—'}
