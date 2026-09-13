@@ -43,16 +43,13 @@ const DEFAULT_COLOR = { bg: 'bg-slate-400 dark:bg-slate-500', hex: '#94a3b8' }
 export default async function InventoryPage() {
   const supabase = await createClient()
   const locale = await getLocale()
-  const dict = getDictionary(locale) as any
-
-  const getFallbackText = (textTh: string, textEn: string) => {
-    return locale === 'th' ? textTh : textEn
-  }
+  const dict = await getDictionary(locale)
 
   const renderPlural = (count: number, word: string) => {
     if (locale === 'th') return word;
     if (count <= 1) return word;
     if (word === 'box') return 'boxes'; 
+    if (word.endsWith('s')) return word; // <--- เพิ่มตัวดัก ป้องกัน s ซ้อน (itemss)
     return `${word}s`;
   }
 
@@ -125,25 +122,22 @@ export default async function InventoryPage() {
   }, {} as Record<string, { totalItems: number; categories: Record<string, number> }>)
   const maxCenterItems = Math.max(1, ...Object.values(centerStats).map((c) => c.totalItems))
 
-  // Logic แยกหน่วย ป้องกันหน่วยตีกัน
   const shortageWithStock = shortageRows.map((row) => {
     const targetName = row.item_name.toLowerCase().trim()
     
     const matchingStock = stockRows.filter((s) => {
       const stockName = s.item_name.toLowerCase().trim()
-      return stockName === targetName || stockName.includes(targetName) || targetName.includes(stockName)
+      return s.category === row.category && (stockName === targetName || stockName.includes(targetName))
     })
     
     const validStock = matchingStock.filter(s => s.nearest_expiry === null || daysUntil(s.nearest_expiry) >= 0)
     
-    // จัดกลุ่มตามหน่วย (Grouping by Unit)
     const unitGroups: Record<string, number> = {}
     validStock.forEach(s => {
       const u = s.unit.trim()
       unitGroups[u] = (unitGroups[u] || 0) + s.total_remaining
     })
 
-    // หาหน่วยหลัก (Primary Unit) ที่มีจำนวนเยอะสุด
     let primaryUnit = ''
     let maxQty = -1
     Object.entries(unitGroups).forEach(([u, qty]) => {
@@ -152,18 +146,18 @@ export default async function InventoryPage() {
         primaryUnit = u
       }
     })
-    if (!primaryUnit) primaryUnit = dict.inventory?.defaultUnit ?? 'หน่วย'
+    if (!primaryUnit) primaryUnit = dict.inventory.defaultUnit
     
     const primaryInStock = unitGroups[primaryUnit] || 0
 
-    // เตรียม String สำหรับหน่วยอื่นๆ (Other Units)
-    const otherUnitsArr: string[] = []
+    // ประกาศ Map ตรงนี้เพื่อความชัวร์ 100% ว่าจะอ่านค่าได้บน Server
     const unitThToEnMap: Record<string, string> = {
-        'หน่วย': 'unit', 'แพ็ค': 'pack', 'กระป๋อง': 'can', 
-        'ชุด': 'set', 'ขวด': 'bottle', 'ถุง': 'bag', 'ชิ้น': 'piece', 
-        'กล่อง': 'box', 'ลัง': 'crate', 'ผืน': 'piece', 'ห่อ': 'packet' // ใช้ packet แทนแพ็ค
+      'ชุด': 'set', 'ขวด': 'bottle', 'กระป๋อง': 'can', 
+      'ถุง': 'bag', 'แพ็ค': 'pack', 'ชิ้น': 'piece', 
+      'กล่อง': 'box', 'ลัง': 'crate', 'ผืน': 'piece', 'ห่อ': 'packet'
     }
 
+    const otherUnitsArr: string[] = []
     Object.entries(unitGroups).forEach(([u, qty]) => {
       if (u !== primaryUnit) {
         const translatedU = locale === 'th' ? u : (unitThToEnMap[u] ?? u)
@@ -191,52 +185,49 @@ export default async function InventoryPage() {
         </p>
       </header>
 
-      {/* --- กล่องสถิติ --- */}
       <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div className="flex flex-col justify-center rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{dict.inventory.totalStockItems ?? getFallbackText('รายการสิ่งของในคลัง', 'Total items in stock')}</span>
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{dict.inventory.totalStockItems}</span>
           <span className="mt-2 text-3xl font-bold text-slate-800 dark:text-slate-100">
-            {totalUniqueItems.toLocaleString()} <span className="text-base font-normal text-slate-500">{dict.inventory.items ?? renderPlural(totalUniqueItems, getFallbackText('รายการ', 'item'))}</span>
+            {totalUniqueItems.toLocaleString()} <span className="text-base font-normal text-slate-500">{renderPlural(totalUniqueItems, dict.inventory.items)}</span>
           </span>
         </div>
         <div className="flex flex-col justify-center rounded-xl border border-slate-200/80 bg-amber-50 p-5 shadow-sm ring-1 ring-amber-500/20 dark:border-amber-900/30 dark:bg-amber-950/20">
-          <span className="text-sm font-medium text-amber-700 dark:text-amber-400">{dict.inventory.expiringSoonTitle ?? getFallbackText('⚠️ ใกล้หมดอายุ (7 วัน)', '⚠️ Near expiry (7 days)')}</span>
+          <span className="text-sm font-medium text-amber-700 dark:text-amber-400">{dict.inventory.expiringSoonTitle}</span>
           <span className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-500">
-            {expiringSoonCount.toLocaleString()} <span className="text-base font-normal text-amber-700/60 dark:text-amber-500/60">{dict.inventory.items ?? renderPlural(expiringSoonCount, getFallbackText('รายการ', 'item'))}</span>
+            {expiringSoonCount.toLocaleString()} <span className="text-base font-normal text-amber-700/60 dark:text-amber-500/60">{renderPlural(expiringSoonCount, dict.inventory.items)}</span>
           </span>
         </div>
         <div className="flex flex-col justify-center rounded-xl border border-slate-200/80 bg-red-50 p-5 shadow-sm ring-1 ring-red-500/20 dark:border-red-900/30 dark:bg-red-950/20">
-          <span className="text-sm font-medium text-red-700 dark:text-red-400">{dict.inventory.expiredTitle ?? getFallbackText('❌ หมดอายุแล้ว', '❌ Expired')}</span>
+          <span className="text-sm font-medium text-red-700 dark:text-red-400">{dict.inventory.expiredTitle}</span>
           <span className="mt-2 text-3xl font-bold text-red-600 dark:text-red-500">
-            {expiredCount.toLocaleString()} <span className="text-base font-normal text-red-700/60 dark:text-red-500/60">{dict.inventory.items ?? renderPlural(expiredCount, getFallbackText('รายการ', 'item'))}</span>
+            {expiredCount.toLocaleString()} <span className="text-base font-normal text-red-700/60 dark:text-red-500/60">{renderPlural(expiredCount, dict.inventory.items)}</span>
           </span>
         </div>
         
-        {/* การ์ดแยกขาดจริง/รอจัดสรร + แก้ Plural ของ requests */}
         <div className="flex flex-col justify-center rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
           <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            {getFallbackText('ขาดจริง / รอจัดสรร', 'Shortage / Ready')}
+            {dict.inventory.shortageAndReady}
           </span>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-red-600 dark:text-red-500" title={getFallbackText('ของที่ไม่พอ', 'Actual Shortage')}>
+            <span className="text-3xl font-bold text-red-600 dark:text-red-500" title={dict.inventory.actualShortage}>
               {shortageWithStock.filter(r => !r.isReady).length}
             </span>
             <span className="text-xl font-light text-slate-300 dark:text-slate-600">/</span>
-            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500" title={getFallbackText('ของที่มีพร้อมจัดสรร', 'Ready to allocate')}>
+            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500" title={dict.inventory.readyToAllocateTitle}>
               {shortageWithStock.filter(r => r.isReady).length}
             </span>
             <span className="text-sm font-normal text-slate-500">
-               {renderPlural(shortageWithStock.length, getFallbackText('คำขอ', 'request'))}
+               {renderPlural(shortageWithStock.length, dict.inventory.requests)}
             </span>
           </div>
         </div>
       </section>
 
-      {/* --- กราฟแสดงผล --- */}
       <section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="flex flex-col rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
           <h2 className="mb-6 text-sm font-semibold text-slate-800 dark:text-slate-300">
-            {dict.inventory.diversityChartTitle ?? getFallbackText("สัดส่วนความหลากหลายของคลัง (แยกตามหมวด)", "Stock variety proportion (by category)")}
+            {dict.inventory.diversityChartTitle}
           </h2>
           {totalUniqueItems === 0 ? (
             <div className="flex flex-1 items-center justify-center text-sm text-slate-400">{dict.inventory.emptyStock}</div>
@@ -245,7 +236,7 @@ export default async function InventoryPage() {
               <div className="relative flex h-36 w-36 items-center justify-center rounded-full shadow-sm" style={{ background: donutGradient }}>
                 <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-inner dark:bg-slate-900">
                   <span className="text-lg font-bold text-slate-700 dark:text-slate-200">
-                    {totalUniqueItems} <span className="text-sm">{dict.inventory.items ?? renderPlural(totalUniqueItems, getFallbackText('รายการ', 'item'))}</span>
+                    {totalUniqueItems} <span className="text-sm">{renderPlural(totalUniqueItems, dict.inventory.items)}</span>
                   </span>
                 </div>
               </div>
@@ -270,7 +261,7 @@ export default async function InventoryPage() {
 
         <div className="flex flex-col rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
           <h2 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-300">
-            {dict.inventory.centerChartTitle ?? getFallbackText("จำนวนรายการสิ่งของของแต่ละศูนย์", "Total unique items per center")}
+            {dict.inventory.centerChartTitle}
           </h2>
           
           {Object.keys(centerStats).length > 0 && (
@@ -294,8 +285,8 @@ export default async function InventoryPage() {
               {Object.entries(centerStats).map(([cid, stats]) => (
                 <div key={cid} className="flex flex-col gap-1.5">
                   <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
-                    <span className="truncate">{centerName.get(cid) ?? (dict.inventory.unknownCenter ?? getFallbackText('ศูนย์ไม่ทราบชื่อ', 'Unknown Center'))}</span>
-                    <span className="text-slate-500">{stats.totalItems} {dict.inventory.items ?? renderPlural(stats.totalItems, getFallbackText('รายการ', 'item'))}</span>
+                    <span className="truncate">{centerName.get(cid) ?? dict.inventory.unknownCenter}</span>
+                    <span className="text-slate-500">{stats.totalItems} {renderPlural(stats.totalItems, dict.inventory.items)}</span>
                   </div>
                   <div className="flex h-4 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner dark:bg-slate-800">
                     {Object.entries(stats.categories).map(([cat, count]) => {
@@ -304,7 +295,7 @@ export default async function InventoryPage() {
                       return (
                         <div
                           key={cat}
-                          title={`${CATEGORY_LABEL[cat] ?? cat}: ${count} ${dict.inventory.items ?? getFallbackText('รายการ', 'item')}`}
+                          title={`${CATEGORY_LABEL[cat] ?? cat}: ${count} ${dict.inventory.items}`}
                           className={`h-full ${colorClass} transition-all hover:brightness-110`}
                           style={{ width: `${widthPct}%` }}
                         />
@@ -318,11 +309,10 @@ export default async function InventoryPage() {
         </div>
       </section>
 
-      {/* --- ส่วนคำขอขาดแคลน --- */}
       <section className="mb-10">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/5">
           <h2 className="mb-6 text-sm font-semibold text-slate-800 dark:text-slate-300">
-            {dict.inventory.shortageStatusTitle ?? getFallbackText('สถานะคำขอรับบริจาค / ของที่ขาดแคลน', 'Donation request status / Shortage items')} ({shortageWithStock.length} {dict.inventory.items ?? renderPlural(shortageWithStock.length, getFallbackText('รายการ', 'item'))})
+            {dict.inventory.shortageStatusTitle} ({shortageWithStock.length} {renderPlural(shortageWithStock.length, dict.inventory.items)})
           </h2>
           {shortageWithStock.length === 0 ? (
             <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 shadow-inner dark:border-slate-700 dark:bg-slate-900">
@@ -338,21 +328,21 @@ export default async function InventoryPage() {
                   <div key={`${row.category}-${row.item_name}`} className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-end justify-between gap-2 text-sm">
                       <div className="font-medium text-slate-800 dark:text-slate-200">
-                        {row.item_name} <span className="ml-1 text-xs font-normal text-slate-500">({dict.inventory.target ?? getFallbackText('เป้าหมาย', 'Target')}: {row.shortage} {renderPlural(row.shortage, row.unit)})</span>
+                        {row.item_name} <span className="ml-1 text-xs font-normal text-slate-500">({dict.inventory.target}: {row.shortage} {renderPlural(row.shortage, row.unit)})</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {row.isReady ? (
                           <>
                             <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
-                              ✅ {dict.inventory.readyToAllocate ?? getFallbackText('มีของพร้อมจัดสรร', 'Ready to Allocate')} ({row.inStock} {renderPlural(row.inStock, row.unit)}) <span className="text-emerald-600/70">{row.otherUnitsStr}</span>
+                              ✅ {dict.inventory.readyToAllocate} ({row.inStock} {renderPlural(row.inStock, row.unit)}) <span className="text-emerald-600/70">{row.otherUnitsStr}</span>
                             </span>
-                            <Link href="/allocations" className="inline-flex items-center justify-center rounded-md bg-brand px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 dark:focus:ring-offset-slate-900 transition-colors">
-                              {dict.inventory.allocateBtn ?? getFallbackText('จัดสรร →', 'Allocate →')}
+                            <Link href="/allocations" className="inline-flex items-center justify-center rounded-md bg-brand px-3 py-1 text-xs font-medium text-white shadow-sm hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 dark:focus:ring-offset-slate-900 transition-colors">
+                              {dict.inventory.allocateBtn}
                             </Link>
                           </>
                         ) : (
                           <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20">
-                            ❌ {dict.inventory.missingMore ?? getFallbackText('ขาดอีก', 'Short')} {row.missing} {renderPlural(row.missing, row.unit)} <span className="ml-1 font-normal text-red-500/70">({dict.inventory.alreadyHave ?? getFallbackText('มีแล้ว', 'current stock')} {row.inStock}){row.otherUnitsStr}</span>
+                            ❌ {dict.inventory.missingMore} {row.missing} {renderPlural(row.missing, row.unit)} <span className="ml-1 font-normal text-red-500/70">({dict.inventory.alreadyHave} {row.inStock}){row.otherUnitsStr}</span>
                           </span>
                         )}
                       </div>
@@ -362,17 +352,16 @@ export default async function InventoryPage() {
                       <div className="flex h-full w-full transition-all">
                         {stockPct > 0 && (
                           <div 
-                            // เปลี่ยนสีจากฟ้าเป็นกรมท่า bg-indigo-500 ให้ไม่สับสนกับน้ำดื่ม
                             className={`h-full ${row.isReady ? 'bg-emerald-500' : 'bg-indigo-500'} hover:brightness-110`} 
                             style={{ width: `${stockPct}%` }}
-                            title={`${dict.inventory.alreadyHave ?? getFallbackText('มีแล้ว', 'current stock')}: ${Math.min(row.inStock, row.shortage)} ${renderPlural(Math.min(row.inStock, row.shortage), row.unit)}`}
+                            title={`${dict.inventory.alreadyHave}: ${Math.min(row.inStock, row.shortage)} ${renderPlural(Math.min(row.inStock, row.shortage), row.unit)}`}
                           />
                         )}
                         {missingPct > 0 && (
                           <div 
                             className="h-full bg-red-500 hover:brightness-110" 
                             style={{ width: `${missingPct}%` }}
-                            title={`${dict.inventory.missingMore ?? getFallbackText('ขาดอีก', 'Short')}: ${row.missing} ${renderPlural(row.missing, row.unit)}`}
+                            title={`${dict.inventory.missingMore}: ${row.missing} ${renderPlural(row.missing, row.unit)}`}
                           />
                         )}
                       </div>
@@ -385,7 +374,6 @@ export default async function InventoryPage() {
         </div>
       </section>
 
-      {/* --- ตาราง --- */}
       <InventoryTable 
         stockRows={stockRows} 
         isAdmin={isAdmin} 
