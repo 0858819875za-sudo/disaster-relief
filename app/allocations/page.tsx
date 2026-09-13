@@ -16,6 +16,7 @@ import { PageHeader } from '../page-header'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import { SuccessDialog, type AllocationSummary } from './success-dialog'
 
 // วันที่แบบ YYYY-MM-DD ตาม UTC ให้ตรงกับ current_date ของ Postgres (Supabase ใช้ UTC)
 function todayIso() {
@@ -25,9 +26,9 @@ function todayIso() {
 export default async function AllocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; done?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, done } = await searchParams
   const supabase = await createClient()
   const user = await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -53,6 +54,49 @@ export default async function AllocationsPage({
 
   const isAdmin = me?.role === 'admin'
   const requests = sortByUrgency(requestRows ?? [])
+
+  // สรุปผลการจัดสรรที่เพิ่งทำ (มาจาก redirect ของ allocate action)
+  let summary: AllocationSummary | null = null
+  if (done) {
+    const { data: a } = await supabase
+      .from('allocations')
+      .select(
+        'quantity_allocated, requests(item_name, quantity_requested, quantity_fulfilled, status, centers(name)), donations(unit, quantity_remaining, centers(name))',
+      )
+      .eq('id', done)
+      .maybeSingle()
+    if (a) {
+      const req = a.requests as unknown as {
+        item_name: string
+        quantity_requested: number
+        quantity_fulfilled: number
+        status: string
+        centers: { name?: string } | null
+      } | null
+      const don = a.donations as unknown as {
+        unit: string
+        quantity_remaining: number
+        centers: { name?: string } | null
+      } | null
+      const REQUEST_STATUS: Record<string, string> = {
+        pending: dict.requests.statusPending,
+        partial: dict.requests.statusPartial,
+        fulfilled: dict.requests.statusFulfilled,
+        cancelled: dict.requests.statusCancelled,
+      }
+      summary = {
+        itemName: req?.item_name ?? '—',
+        quantity: a.quantity_allocated,
+        unit: don?.unit ?? '',
+        fromCenter: don?.centers?.name ?? '—',
+        toCenter: req?.centers?.name ?? '—',
+        lotRemaining: don?.quantity_remaining ?? 0,
+        requestFulfilled: req?.quantity_fulfilled ?? 0,
+        requestRequested: req?.quantity_requested ?? 0,
+        requestStatusLabel: req ? (REQUEST_STATUS[req.status] ?? req.status) : '—',
+      }
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -80,6 +124,8 @@ export default async function AllocationsPage({
           {error}
         </p>
       )}
+
+      {summary && <SuccessDialog key={done} summary={summary} dict={dict} />}
 
       <AllocateForm
         dict={dict}

@@ -26,7 +26,7 @@ function revalidateAllocationPages() {
 export async function allocate(formData: FormData) {
   const supabase = await createClient()
 
-  const { error } = await supabase.rpc('allocate_items', {
+  const { data: allocationId, error } = await supabase.rpc('allocate_items', {
     p_request_id: String(formData.get('request_id')),
     p_donation_id: String(formData.get('donation_id')),
     p_quantity: Number(formData.get('quantity')),
@@ -37,7 +37,8 @@ export async function allocate(formData: FormData) {
   }
 
   revalidateAllocationPages()
-  redirect('/allocations')
+  // ส่ง id กลับไปให้หน้าจัดสรรเปิดป๊อปอัปสรุปผลการจัดสรรที่เพิ่งทำ
+  redirect('/allocations?done=' + encodeURIComponent(String(allocationId)))
 }
 
 export async function confirmDelivery(formData: FormData) {

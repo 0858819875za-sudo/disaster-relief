@@ -4,6 +4,7 @@
 // เห็นเฉพาะรายการที่ศูนย์ตัวเองเกี่ยวข้อง / admin เห็นทั้งหมด (allocations_select)
 // =====================================================================
 
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireStaffOrAdmin } from '@/lib/guard'
 import { confirmDelivery, cancelAllocation } from '../actions'
@@ -70,6 +71,14 @@ export default async function AllocationHistoryPage({
         }
         title={dict.allocations.historyTitle}
         subtitle={dict.allocations.historySubtitle}
+        action={
+          <Link
+            href="/allocations"
+            className="whitespace-nowrap text-sm font-medium text-slate-600 underline hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          >
+            {dict.allocations.backToAllocate}
+          </Link>
+        }
       />
 
       {error && (
