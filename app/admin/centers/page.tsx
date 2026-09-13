@@ -150,6 +150,7 @@ export default async function AdminCentersPage({
                       >
                         <option value="staff">staff</option>
                         <option value="admin">admin</option>
+                        <option value="volunteer">volunteer</option>
                       </select>
                       <select
                         name="center_id"
