@@ -139,13 +139,13 @@ export default async function AllocationsPage({
         />
       )}
 
-      {summary && <SuccessDialog key={done} summary={summary} dict={dict} />}
+      {summary && <SuccessDialog key={`success-${done}`} summary={summary} dict={dict} />}
 
       {/* remount ฟอร์มหลังจัดสรรสำเร็จ — Next เก็บ state ของ client component ไว้ตอน
           redirect กลับหน้าเดิม ถ้าไม่ remount คำขอที่เพิ่งจัดสรรจะค้างอยู่ในฟอร์ม
           (ตอน error ไม่ remount เพื่อให้ผู้ใช้แก้ตัวเลขเดิมต่อได้) */}
       <AllocateForm
-        key={done ?? 'allocate-form'}
+        key={`form-${done ?? ''}`}
         dict={dict}
         isAdmin={isAdmin}
         locale={locale}
