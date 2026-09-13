@@ -25,10 +25,19 @@ const prompt = Prompt({
   weight: ["500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: "WalaiTrack — ระบบติดตามการบริจาคและกระจายสิ่งของช่วยเหลือภัยพิบัติ",
-  description: "ระบบภายในสำหรับเจ้าหน้าที่ศูนย์รับบริจาคและศูนย์พักพิง",
-};
+// ชื่อแท็บเบราว์เซอร์ต้องเปลี่ยนตามภาษาที่เลือกด้วย (อ่านจาก cookie เดียวกับเนื้อหา)
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  return locale === "en"
+    ? {
+        title: "WalaiTrack — Disaster relief donation & distribution tracking",
+        description: "Internal system for donation centers and shelter staff",
+      }
+    : {
+        title: "WalaiTrack — ระบบติดตามการบริจาคและกระจายสิ่งของช่วยเหลือภัยพิบัติ",
+        description: "ระบบภายในสำหรับเจ้าหน้าที่ศูนย์รับบริจาคและศูนย์พักพิง",
+      };
+}
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // layout ครอบทุกหน้ารวมถึง /login กับ /pledge (สาธารณะ) ด้วย เลยต้องเช็ค

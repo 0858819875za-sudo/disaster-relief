@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireStaffOrAdmin } from '@/lib/guard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { unitLabel } from '@/lib/units'
 
 export default async function DonationsPage() {
   const supabase = await createClient()
@@ -72,10 +73,10 @@ export default async function DonationsPage() {
                     {CATEGORY_LABEL[d.category] ?? d.category}
                   </td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-                    {d.quantity_received} {d.unit}
+                    {d.quantity_received} {unitLabel(d.unit, locale)}
                   </td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-                    {d.quantity_remaining} {d.unit}
+                    {d.quantity_remaining} {unitLabel(d.unit, locale)}
                   </td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{d.expiry_date ?? '—'}</td>
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">

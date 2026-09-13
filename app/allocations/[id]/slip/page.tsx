@@ -99,7 +99,7 @@ export default async function AllocationSlipPage({
         </div>
       </div>
 
-      <PrintButton label={dict.receipt.print} />
+      <PrintButton label={dict.allocations.printSlip} />
     </main>
   )
 }
