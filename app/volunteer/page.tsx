@@ -15,6 +15,7 @@ import { confirmReceipt } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import { ErrorDialog } from '../allocations/error-dialog'
 
 export default async function VolunteerPage({
   searchParams,
@@ -90,9 +91,13 @@ export default async function VolunteerPage({
       </header>
 
       {error && (
-        <p role="alert" className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
-          {error}
-        </p>
+        <ErrorDialog
+          key={error}
+          title={dict.allocations.errorTitle}
+          message={error}
+          closeLabel={dict.allocations.close}
+          clearHref="/volunteer"
+        />
       )}
 
       <section className="mb-10">
