@@ -14,6 +14,8 @@ import { createClient } from '@/lib/supabase/server'
 import { confirmReceipt } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { sortByUrgency } from '@/lib/urgency'
+import { ErrorDialog } from '../allocations/error-dialog'
 
 export default async function VolunteerPage({
   searchParams,
@@ -57,14 +59,13 @@ export default async function VolunteerPage({
 
   const center = profile.centers as unknown as { name?: string; type?: string } | null
 
-  const [{ data: requests }, { data: pending }] = await Promise.all([
+  const [{ data: requestRows }, { data: pending }] = await Promise.all([
     profile.center_id
       ? supabase
           .from('requests')
           .select('id, item_name, category, quantity_requested, quantity_fulfilled, urgency, status')
           .neq('status', 'fulfilled')
           .neq('status', 'cancelled')
-          .order('urgency', { ascending: false })
       : Promise.resolve({ data: [] }),
     profile.center_id
       ? supabase
@@ -74,6 +75,7 @@ export default async function VolunteerPage({
           .eq('requests.center_id', profile.center_id)
       : Promise.resolve({ data: [] }),
   ])
+  const requests = requestRows ? sortByUrgency([...requestRows]) : null
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -89,9 +91,13 @@ export default async function VolunteerPage({
       </header>
 
       {error && (
-        <p role="alert" className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
-          {error}
-        </p>
+        <ErrorDialog
+          key={error}
+          title={dict.allocations.errorTitle}
+          message={error}
+          closeLabel={dict.allocations.close}
+          clearHref="/volunteer"
+        />
       )}
 
       <section className="mb-10">

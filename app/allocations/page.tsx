@@ -1,9 +1,13 @@
 // =====================================================================
-// หน้าจัดสรรของ (F5) — เลือกคำขอ + เลือกล็อตในคลัง แล้วยืนยันจัดสรร/ตัดจ่าย
+// หน้าจัดสรรของ (F5) — เลือกคำขอ แล้วระบบเติมจำนวนจากล็อตในคลังให้ (FEFO)
+// ยืนยันแล้วตัดจ่ายได้หลายล็อตในครั้งเดียว
 //
-// การตัดยอดจริงเกิดที่ allocate_items (docs/sql/05_functions.sql) ทั้งหมด
-// ฝั่งนี้แค่แสดงตัวเลือกแล้วส่ง id/จำนวนไปเรียก rpc — ไม่คำนวณเองที่ frontend
-// เพื่อไม่ให้กฎ (หมดอายุ/เกินยอด/หมวดหมู่ไม่ตรง) หลุดไปสองที่
+// การตัดยอดจริงเกิดที่ allocate_items_multi → allocate_items
+// (docs/sql/17_f5_hardening.sql, 18_f5_features.sql) ทั้งหมด
+// ฝั่งนี้แค่แสดงตัวเลือกแล้วส่ง id/จำนวนไปเรียก rpc — ไม่ตัดยอดเองที่ frontend
+// เพื่อไม่ให้กฎ (หมดอายุ/เกินยอด/หมวดหมู่ไม่ตรง/ข้ามศูนย์) หลุดไปสองที่
+//
+// จัดสรรข้ามศูนย์ = admin เท่านั้น (staff เห็นแค่ข้อมูลศูนย์ตัวเองตาม RLS อยู่แล้ว)
 // =====================================================================
 
 import Link from 'next/link'
@@ -13,32 +17,95 @@ import { AllocateForm } from './allocate-form'
 import { PageHeader } from '../page-header'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { sortByUrgency } from '@/lib/urgency'
+import { SuccessDialog, type AllocationSummary } from './success-dialog'
+import { ErrorDialog } from './error-dialog'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// วันที่แบบ YYYY-MM-DD ตาม UTC ให้ตรงกับ current_date ของ Postgres (Supabase ใช้ UTC)
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export default async function AllocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; done?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, done } = await searchParams
   const supabase = await createClient()
-  await requireStaffOrAdmin(supabase)
+  const user = await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
   const dict = getDictionary(locale)
 
-  const [{ data: requests }, { data: donations }] = await Promise.all([
+  const [{ data: me }, { data: requestRows }, { data: donations }] = await Promise.all([
+    supabase.from('profiles').select('role').eq('id', user.id).single(),
     supabase
       .from('requests')
       .select(
-        'id, item_name, category, quantity_requested, quantity_fulfilled, urgency, centers(name)',
+        'id, center_id, item_name, category, quantity_requested, quantity_fulfilled, urgency, created_at, centers(name)',
       )
       .in('status', ['pending', 'partial'])
-      .order('urgency', { ascending: false }),
+      .order('created_at', { ascending: true }),
+    // FEFO: ใกล้หมดอายุก่อน และตัดล็อตที่หมดอายุแล้วออกตั้งแต่ตอนดึง
     supabase
       .from('donations')
-      .select('id, item_name, category, unit, quantity_remaining, expiry_date, centers(name)')
+      .select('id, center_id, item_name, category, unit, quantity_remaining, expiry_date, centers(name)')
       .gt('quantity_remaining', 0)
+      .or(`expiry_date.is.null,expiry_date.gte.${todayIso()}`)
       .order('expiry_date', { ascending: true, nullsFirst: false }),
   ])
+
+  const isAdmin = me?.role === 'admin'
+  const requests = sortByUrgency(requestRows ?? [])
+
+  // สรุปผลการจัดสรรที่เพิ่งทำ (มาจาก redirect ของ allocate action)
+  let summary: AllocationSummary | null = null
+  const doneIds = (done ?? '').split(',').filter((id) => UUID_RE.test(id))
+  if (doneIds.length > 0) {
+    const { data: rows } = await supabase
+      .from('allocations')
+      .select(
+        'quantity_allocated, requests(item_name, quantity_requested, quantity_fulfilled, status, centers(name)), donations(unit, quantity_remaining, centers(name))',
+      )
+      .in('id', doneIds)
+    if (rows && rows.length > 0) {
+      const REQUEST_STATUS: Record<string, string> = {
+        pending: dict.requests.statusPending,
+        partial: dict.requests.statusPartial,
+        fulfilled: dict.requests.statusFulfilled,
+        cancelled: dict.requests.statusCancelled,
+      }
+      const req = rows[0].requests as unknown as {
+        item_name: string
+        quantity_requested: number
+        quantity_fulfilled: number
+        status: string
+        centers: { name?: string } | null
+      } | null
+      summary = {
+        itemName: req?.item_name ?? '—',
+        toCenter: req?.centers?.name ?? '—',
+        requestFulfilled: req?.quantity_fulfilled ?? 0,
+        requestRequested: req?.quantity_requested ?? 0,
+        requestStatusLabel: req ? (REQUEST_STATUS[req.status] ?? req.status) : '—',
+        lots: rows.map((row) => {
+          const don = row.donations as unknown as {
+            unit: string
+            quantity_remaining: number
+            centers: { name?: string } | null
+          } | null
+          return {
+            fromCenter: don?.centers?.name ?? '—',
+            quantity: row.quantity_allocated,
+            unit: don?.unit ?? '',
+            lotRemaining: don?.quantity_remaining ?? 0,
+          }
+        }),
+      }
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -62,14 +129,21 @@ export default async function AllocationsPage({
       />
 
       {error && (
-        <p role="alert" className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
-          {error}
-        </p>
+        <ErrorDialog
+          key={error}
+          title={dict.allocations.errorTitle}
+          message={error}
+          closeLabel={dict.allocations.close}
+          clearHref="/allocations"
+        />
       )}
+
+      {summary && <SuccessDialog key={done} summary={summary} dict={dict} />}
 
       <AllocateForm
         dict={dict}
-        requests={(requests ?? []).map((r) => ({
+        isAdmin={isAdmin}
+        requests={requests.map((r) => ({
           ...r,
           centers: r.centers as unknown as { name?: string } | null,
         }))}

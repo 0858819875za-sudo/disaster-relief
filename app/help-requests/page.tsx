@@ -8,6 +8,7 @@ import { requireStaffOrAdmin } from '@/lib/guard'
 import { confirmHelpRequest, dismissHelpRequest } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
+import { sortByUrgency } from '@/lib/urgency'
 
 export default async function HelpRequestsPage({
   searchParams,
@@ -40,11 +41,11 @@ export default async function HelpRequestsPage({
     dismissed: dict.queue.statusDismissed,
   }
 
-  const { data: pledges } = await supabase
+  const { data: pledgeRows } = await supabase
     .from('request_pledges')
     .select('*, centers(name)')
-    .order('urgency', { ascending: false })
     .order('created_at', { ascending: false })
+  const pledges = pledgeRows ? sortByUrgency(pledgeRows) : null
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-12">
