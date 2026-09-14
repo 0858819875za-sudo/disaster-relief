@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { translateAllocationError } from '@/lib/allocation-errors'
+import { deliveryArgs } from '@/lib/delivery-args'
 
 async function errorText(message: string) {
   const dict = getDictionary(await getLocale())
@@ -58,11 +59,11 @@ export async function allocate(formData: FormData) {
   redirect('/allocations?done=' + encodeURIComponent(ids))
 }
 
+// ยืนยันรับของ + จำนวนที่ได้รับจริง — mark_delivered (docs/sql/23_f5_improvements.sql)
+// บันทึกผู้ยืนยัน และเปิดยอดที่ขาดกลับให้คำขอเมื่อได้รับไม่ครบ
 export async function confirmDelivery(formData: FormData) {
   const supabase = await createClient()
-  const { error } = await supabase.rpc('mark_delivered', {
-    p_allocation_id: String(formData.get('id')),
-  })
+  const { error } = await supabase.rpc('mark_delivered', deliveryArgs(formData))
   if (error) {
     redirect('/allocations/history?error=' + (await errorText(error.message)))
   }
@@ -71,7 +72,7 @@ export async function confirmDelivery(formData: FormData) {
 }
 
 // ยกเลิกการจัดสรร — คืนยอดกลับทั้งสองฝั่ง และบันทึกเหตุผลใน cancel_allocation
-// ฟังก์ชันบังคับ is_admin() และความยาวเหตุผลเองอีกชั้นแล้ว
+// ฟังก์ชันบังคับสิทธิ์ (admin หรือ staff ผู้จัดสรรเองภายใน 30 นาที) และความยาวเหตุผลเองอีกชั้นแล้ว
 export async function cancelAllocation(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase.rpc('cancel_allocation', {

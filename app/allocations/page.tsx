@@ -21,12 +21,14 @@ import { sortByUrgency } from '@/lib/urgency'
 import { SuccessDialog, type AllocationSummary } from './success-dialog'
 import { ErrorDialog } from './error-dialog'
 import { unitLabel } from '@/lib/units'
+import { itemsMatch } from '@/lib/item-match'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// วันที่แบบ YYYY-MM-DD ตาม UTC ให้ตรงกับ current_date ของ Postgres (Supabase ใช้ UTC)
+// วันที่แบบ YYYY-MM-DD ตามเวลาไทย ให้ตรงกับที่ allocate_items ใช้ตัดสินว่าหมดอายุ
+// (docs/sql/23_f5_improvements.sql)
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
 }
 
 export default async function AllocationsPage({
@@ -45,7 +47,7 @@ export default async function AllocationsPage({
     supabase
       .from('requests')
       .select(
-        'id, center_id, item_name, category, quantity_requested, quantity_fulfilled, urgency, created_at, centers(name)',
+        'id, center_id, item_name, category, unit, quantity_requested, quantity_fulfilled, urgency, created_at, centers(name)',
       )
       .in('status', ['pending', 'partial'])
       .order('created_at', { ascending: true }),
@@ -59,7 +61,20 @@ export default async function AllocationsPage({
   ])
 
   const isAdmin = me?.role === 'admin'
-  const requests = sortByUrgency(requestRows ?? [])
+  const lots = donations ?? []
+  // แนะนำคำขอที่ควรจัดสรรก่อน: เรียงตามความเร่งด่วน และภายในระดับเดียวกัน
+  // คำขอที่มีล็อตชื่อตรง (และหน่วยตรงถ้าคำขอระบุ) พร้อมจ่ายอยู่แล้วขึ้นก่อน
+  const withReady = (requestRows ?? []).map((r) => ({
+    ...r,
+    ready: lots.some(
+      (d) =>
+        d.category === r.category &&
+        (isAdmin || d.center_id === r.center_id) &&
+        itemsMatch(r.item_name, d.item_name) &&
+        (!r.unit?.trim() || d.unit.trim() === r.unit.trim()),
+    ),
+  }))
+  const requests = sortByUrgency([...withReady].sort((a, b) => Number(b.ready) - Number(a.ready)))
 
   // สรุปผลการจัดสรรที่เพิ่งทำ (มาจาก redirect ของ allocate action)
   let summary: AllocationSummary | null = null

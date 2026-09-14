@@ -29,9 +29,11 @@ type Req = {
   center_id: string
   item_name: string
   category: string
+  unit: string | null
   quantity_requested: number
   quantity_fulfilled: number
   centers: { name?: string } | null
+  ready: boolean
 }
 type Don = {
   id: string
@@ -99,13 +101,19 @@ export function AllocateForm({
   const [nearExpiry, setNearExpiry] = useState(false)
 
   const selectedRequest = requests.find((r) => r.id === requestId)
-  const categoryLots = selectedRequest
+  const sameCategoryLots = selectedRequest
     ? donations.filter(
         (d) =>
           d.category === selectedRequest.category &&
           (isAdmin || d.center_id === selectedRequest.center_id),
       )
     : []
+  // คำขอที่ระบุหน่วย: allocate_items ปฏิเสธล็อตหน่วยอื่น จึงไม่แสดงให้เลือกตั้งแต่แรก
+  const requestUnit = selectedRequest?.unit?.trim() ?? ''
+  const categoryLots = requestUnit
+    ? sameCategoryLots.filter((d) => d.unit.trim() === requestUnit)
+    : sameCategoryLots
+  const hiddenByUnit = sameCategoryLots.length - categoryLots.length
   const matchedLots = selectedRequest
     ? categoryLots.filter((d) => itemsMatch(selectedRequest.item_name, d.item_name))
     : []
@@ -264,6 +272,7 @@ export function AllocateForm({
               <option key={r.id} value={r.id}>
                 {r.centers?.name} — {r.item_name} ({CATEGORY_LABEL[r.category] ?? r.category}) · {dict.allocations.remainingWord}{' '}
                 {r.quantity_requested - r.quantity_fulfilled}
+                {r.unit ? ` ${r.unit}` : ''} · {r.ready ? dict.allocations.readyStock : dict.allocations.noStock}
               </option>
             ))}
           </select>
@@ -325,6 +334,11 @@ export function AllocateForm({
             {mixedUnits && !problem && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{dict.allocations.mixedUnitsWarning}</p>
             )}
+            {hiddenByUnit > 0 && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {dict.allocations.unitFilteredNote.replace('{n}', String(hiddenByUnit))}
+              </p>
+            )}
           </div>
         )}
 
@@ -377,6 +391,7 @@ export function AllocateForm({
               <dt className="text-slate-500 dark:text-slate-400">{dict.allocations.totalToAllocate}</dt>
               <dd className="text-right font-semibold text-slate-900 dark:text-slate-100">
                 {total} / {requestRemaining}
+                {selectedRequest?.unit ? ` ${selectedRequest.unit}` : ''}
               </dd>
             </div>
           </dl>

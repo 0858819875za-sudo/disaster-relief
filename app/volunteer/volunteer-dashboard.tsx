@@ -1,6 +1,7 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import type { Locale } from '@/lib/i18n/locale'
 import { ErrorDialog } from '../allocations/error-dialog'
+import { DeliverButton } from '../allocations/deliver-dialog'
 import { confirmReceipt } from './actions'
 
 type RequestRow = {
@@ -9,6 +10,7 @@ type RequestRow = {
 }
 type Delivery = {
   id: string; quantity_allocated: number; delivered_at?: string | null
+  received_quantity?: number | null
   requests: unknown; donations: unknown
 }
 type Props = {
@@ -55,12 +57,18 @@ export function VolunteerDashboard({ dict, locale, name, center, requests, pendi
   const unit = (row: Delivery) => (row.donations as { unit?: string } | null)?.unit ?? ''
   const next = pending[0]
   const phone = center?.contact_phone?.replace(/[^\d+]/g, '')
-  const receiptForm = (row: Delivery) => <form action={confirmReceipt}>
-    <input type="hidden" name="id" value={row.id} />
-    <button type="submit" aria-label={`${v.confirmReceived}: ${itemName(row)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600">
-      <span aria-hidden="true">✓</span>{v.confirmReceived}
-    </button>
-  </form>
+  const a = dict.allocations
+  // กรอกจำนวนที่ได้รับจริงก่อนยืนยัน — ได้รับไม่ครบต้องมีหมายเหตุ (mark_delivered)
+  const receiptForm = (row: Delivery) => <DeliverButton
+    id={row.id} itemName={itemName(row)} allocated={row.quantity_allocated} unit={unit(row)}
+    action={confirmReceipt} variant="button"
+    labels={{
+      button: v.confirmReceived, title: a.deliverTitle, message: a.deliverMessage,
+      allocated: a.allocatedQuantity, received: a.receivedQuantity, note: a.deliveryNote,
+      notePlaceholder: a.deliveryNotePlaceholder, noteRequired: a.deliveryNoteRequired,
+      back: a.close, submit: a.deliverSubmit,
+    }}
+  />
 
   return <main className="mx-auto w-full max-w-7xl space-y-5 px-4 py-7 text-brand sm:px-6 dark:text-slate-100">
     <header className="flex flex-wrap items-center justify-between gap-4">
@@ -136,7 +144,7 @@ export function VolunteerDashboard({ dict, locale, name, center, requests, pendi
         {failed.history ? <p className={`p-6 ${muted}`}>{t.loadError}</p> : !history.length ? <p className={`p-6 ${muted}`}>{t.noHistory}</p> : <ul className="divide-y divide-slate-100 dark:divide-slate-800">{history.map(row => <li key={row.id} className="flex flex-wrap items-center gap-3 px-5 py-4 text-sm">
           <span className="h-2 w-2 rounded-full bg-brand dark:bg-sky-400" aria-hidden="true" />
           <time className="text-xs text-slate-500 dark:text-slate-400" dateTime={row.delivered_at ?? undefined}>{row.delivered_at ? new Intl.DateTimeFormat(locale === 'th' ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' }).format(new Date(row.delivered_at)) : '—'}</time>
-          <span className="flex-1 font-medium">{itemName(row)}</span><span>{format(row.quantity_allocated)} {unit(row)}</span><span className={`rounded-full px-3 py-1 text-xs ${tones[3]}`}>{t.completed}</span>
+          <span className="flex-1 font-medium">{itemName(row)}</span><span>{format(row.quantity_allocated)} {unit(row)}{row.received_quantity != null && row.received_quantity < row.quantity_allocated && <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">({a.receivedShort} {format(row.received_quantity)})</span>}</span><span className={`rounded-full px-3 py-1 text-xs ${tones[3]}`}>{t.completed}</span>
         </li>)}</ul>}
       </section>
     </div>
