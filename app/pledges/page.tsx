@@ -101,6 +101,15 @@ export default async function PledgesPage({
                               compact
                             />
                           )}
+                          {/* ฟอร์มสาธารณะไม่มีช่องหน่วย — เจ้าหน้าที่ระบุตอนรับของจริง */}
+                          <input
+                            name="unit"
+                            required
+                            defaultValue="ชิ้น"
+                            aria-label={dict.donationNew.unit}
+                            title={dict.donationNew.unit}
+                            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                          />
                           <button
                             type="submit"
                             className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"

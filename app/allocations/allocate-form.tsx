@@ -9,7 +9,8 @@
 //
 // จับคู่อัตโนมัติ: พอเลือกคำขอ ระบบแยกล็อตเป็น 2 กลุ่ม
 //   - ล็อตที่ "ชื่อของตรงกับคำขอ" (lib/item-match.ts) เรียงใกล้หมดอายุก่อน (FEFO)
-//     และเติมจำนวนให้ไล่จากล็อตแรกจนครบที่ขาด
+//     และเติมจำนวนให้ไล่จากล็อตแรกจนครบที่ขาด — เติมเฉพาะล็อตที่ชื่อตรงเป๊ะ
+//     (หลังตัดขนาด) ก่อน ถ้าไม่มีเลยจึงเติมจากล็อตที่ชื่อคล้าย เช่น "ข้าวสาร" ↔ "ข้าวสารหอมมะลิ"
 //   - ล็อตอื่นในหมวดเดียวกัน (ของทดแทน) ซ่อนไว้ ถ้าจะใช้ต้องติ๊กยืนยันใน Modal
 // หมวดหมู่ / ศูนย์ (staff) / วันหมดอายุ / ยอดคงเหลือ ยังบังคับซ้ำใน
 // allocate_items_multi → allocate_items อีกชั้น
@@ -20,7 +21,7 @@
 import { useRef, useState } from 'react'
 import { allocate } from './actions'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
-import { itemsMatch } from '@/lib/item-match'
+import { itemCore, itemsMatch } from '@/lib/item-match'
 import { unitLabel } from '@/lib/units'
 
 type Req = {
@@ -114,7 +115,14 @@ export function AllocateForm({
   const requestRemaining = selectedRequest
     ? selectedRequest.quantity_requested - selectedRequest.quantity_fulfilled
     : 0
-  const plan = selectedRequest ? fefoPlan(selectedRequest, matchedLots) : {}
+  // ชื่อคล้ายแต่ไม่ใช่ของเดียวกัน (เช่น "น้ำดื่ม 600ml" กับ "น้ำดื่มสำหรับเด็ก") ยังแสดงให้เลือก
+  // แต่ไม่เติมจำนวนให้เอง ถ้ามีล็อตที่ชื่อตรงเป๊ะอยู่แล้ว
+  const exactLots = selectedRequest
+    ? matchedLots.filter((d) => itemCore(d.item_name) === itemCore(selectedRequest.item_name))
+    : []
+  const plan = selectedRequest
+    ? fefoPlan(selectedRequest, exactLots.length > 0 ? exactLots : matchedLots)
+    : {}
   const qtyByLot = edits && edits.requestId === requestId ? edits.qty : plan
 
   const entries = [...matchedLots, ...otherLots].map((lot) => {

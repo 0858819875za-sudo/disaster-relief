@@ -46,6 +46,7 @@ export async function confirmPledge(formData: FormData) {
       donor_id: donorId,
       item_name: pledge.item_name,
       category: pledge.category,
+      unit: String(formData.get('unit') || '').trim() || 'ชิ้น',
       quantity_received: pledge.quantity,
       quantity_remaining: pledge.quantity,
       received_by: user.id,
