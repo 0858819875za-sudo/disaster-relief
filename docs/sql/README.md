@@ -20,6 +20,7 @@
 | — | `17_f5_hardening.sql` | ปิดช่องโหว่สิทธิ์ F5 (รันหลัง `05` และ `13`): `allocate_items` ต้องเป็น staff/admin และจัดสรรข้ามศูนย์ได้เฉพาะ admin, `mark_delivered` เฉพาะ admin/ศูนย์ปลายทาง, ยกเลิกไม่เปิดคำขอที่ถูกยกเลิกกลับมา, `allocations_select` เห็นเฉพาะศูนย์ที่เกี่ยวข้อง — error เป็นรหัส `F5:<key>` ให้หน้าเว็บแปล TH/EN |
 | — | `18_f5_features.sql` | ฟีเจอร์เพิ่ม F5 (รันหลัง `17`): `allocate_items_multi` จัดสรรหลายล็อตใน transaction เดียว, คอลัมน์ + บังคับเหตุผลการยกเลิก (`cancel_allocation` รับ `p_reason`), computed column `allocated_by_name` / `cancelled_by_name` สำหรับหน้าประวัติ |
 | — | `19_dedupe_test_data.sql` | (ไม่บังคับ) ลบข้อมูลทดสอบที่ซ้ำกันใน `requests` / `donations` / `donation_pledges` / `donors` เก็บแถวเก่าสุดไว้ ไม่แตะแถวที่มีการจัดสรรอ้างอิง — รันส่วน PREVIEW ดูก่อน |
+| — | `20_cleanup_test_records.sql` | (ไม่บังคับ) ลบข้อมูลทดสอบที่ชื่อขึ้นต้นด้วย `[TEST]` ทุกตาราง — หยุดและย้อนกลับทั้งหมดถ้ามีการจัดสรรที่ผูกของทดสอบกับของจริง |
 
 หลังรันครบ 1–6 แล้ว:
 
