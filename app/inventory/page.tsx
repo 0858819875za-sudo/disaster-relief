@@ -5,6 +5,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { requireStaffOrAdmin } from '@/lib/guard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import InventoryTable from './InventoryTable'
@@ -42,6 +43,7 @@ const DEFAULT_COLOR = { bg: 'bg-slate-400 dark:bg-slate-500', hex: '#94a3b8' }
 
 export default async function InventoryPage() {
   const supabase = await createClient()
+  await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
   const dict = await getDictionary(locale)
 
