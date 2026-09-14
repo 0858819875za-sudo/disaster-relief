@@ -3,11 +3,12 @@
 // ยืนยันแล้วตัดจ่ายได้หลายล็อตในครั้งเดียว
 //
 // การตัดยอดจริงเกิดที่ allocate_items_multi → allocate_items
-// (docs/sql/17_f5_hardening.sql, 18_f5_features.sql) ทั้งหมด
+// (docs/sql/17_f5_hardening.sql, 18_f5_features.sql, 23_f5_improvements.sql) ทั้งหมด
 // ฝั่งนี้แค่แสดงตัวเลือกแล้วส่ง id/จำนวนไปเรียก rpc — ไม่ตัดยอดเองที่ frontend
-// เพื่อไม่ให้กฎ (หมดอายุ/เกินยอด/หมวดหมู่ไม่ตรง/ข้ามศูนย์) หลุดไปสองที่
+// เพื่อไม่ให้กฎ (หมดอายุ/เกินยอด/หมวดหมู่/หน่วยไม่ตรง/ข้ามศูนย์) หลุดไปสองที่
 //
 // จัดสรรข้ามศูนย์ = admin เท่านั้น (staff เห็นแค่ข้อมูลศูนย์ตัวเองตาม RLS อยู่แล้ว)
+// เปิดพร้อม ?request=<id> (จากปุ่ม "จัดสรร" ในหน้าคำขอ) จะเลือกคำขอนั้นไว้ให้
 // =====================================================================
 
 import Link from 'next/link'
@@ -22,21 +23,16 @@ import { SuccessDialog, type AllocationSummary } from './success-dialog'
 import { ErrorDialog } from './error-dialog'
 import { unitLabel } from '@/lib/units'
 import { itemsMatch } from '@/lib/item-match'
+import { bangkokToday, daysFromToday } from '@/lib/dates'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// วันที่แบบ YYYY-MM-DD ตามเวลาไทย ให้ตรงกับที่ allocate_items ใช้ตัดสินว่าหมดอายุ
-// (docs/sql/23_f5_improvements.sql)
-function todayIso() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
-}
 
 export default async function AllocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; done?: string }>
+  searchParams: Promise<{ error?: string; done?: string; request?: string }>
 }) {
-  const { error, done } = await searchParams
+  const { error, done, request } = await searchParams
   const supabase = await createClient()
   const user = await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -51,12 +47,12 @@ export default async function AllocationsPage({
       )
       .in('status', ['pending', 'partial'])
       .order('created_at', { ascending: true }),
-    // FEFO: ใกล้หมดอายุก่อน และตัดล็อตที่หมดอายุแล้วออกตั้งแต่ตอนดึง
+    // FEFO: ใกล้หมดอายุก่อน และตัดล็อตที่หมดอายุแล้ว (ตามวันที่เวลาไทย) ออกตั้งแต่ตอนดึง
     supabase
       .from('donations')
       .select('id, center_id, item_name, category, unit, quantity_remaining, expiry_date, received_at, centers(name)')
       .gt('quantity_remaining', 0)
-      .or(`expiry_date.is.null,expiry_date.gte.${todayIso()}`)
+      .or(`expiry_date.is.null,expiry_date.gte.${bangkokToday()}`)
       .order('expiry_date', { ascending: true, nullsFirst: false }),
   ])
 
@@ -124,7 +120,7 @@ export default async function AllocationsPage({
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-12">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <PageHeader
         color="rose"
         icon={
@@ -160,17 +156,19 @@ export default async function AllocationsPage({
           redirect กลับหน้าเดิม ถ้าไม่ remount คำขอที่เพิ่งจัดสรรจะค้างอยู่ในฟอร์ม
           (ตอน error ไม่ remount เพื่อให้ผู้ใช้แก้ตัวเลขเดิมต่อได้) */}
       <AllocateForm
-        key={`form-${done ?? ''}`}
+        key={`form-${done ?? ''}-${request ?? ''}`}
         dict={dict}
         isAdmin={isAdmin}
         locale={locale}
+        initialRequestId={request && UUID_RE.test(request) ? request : ''}
         requests={requests.map((r) => ({
           ...r,
           centers: r.centers as unknown as { name?: string } | null,
         }))}
-        donations={(donations ?? []).map((d) => ({
+        donations={lots.map((d) => ({
           ...d,
           centers: d.centers as unknown as { name?: string } | null,
+          days_left: d.expiry_date ? daysFromToday(d.expiry_date) : null,
         }))}
       />
     </main>

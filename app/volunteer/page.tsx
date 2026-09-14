@@ -15,14 +15,16 @@ import { VolunteerDashboard } from './volunteer-dashboard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import { noticeMessage, type NoticeParams } from '@/lib/notice'
 
 
 export default async function VolunteerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string } & NoticeParams>
 }) {
-  const { error } = await searchParams
+  const params = await searchParams
+  const { error } = params
   const supabase = await createClient()
   const locale = await getLocale()
   const dict = getDictionary(locale)
@@ -70,7 +72,7 @@ export default async function VolunteerPage({
   ])
 
   return <VolunteerDashboard
-    dict={dict} locale={locale} error={error}
+    dict={dict} locale={locale} error={error} notice={noticeMessage(params, dict, locale)}
     name={profile.full_name || profile.username || dict.volunteer.defaultName}
     center={profile.centers as unknown as { name: string; type: string; address: string | null; contact_phone: string | null } | null}
     requests={requests.data ? sortByUrgency([...requests.data]) : []}

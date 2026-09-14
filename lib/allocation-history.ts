@@ -40,6 +40,8 @@ export function historyQuery(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filters: HistoryFilters,
   withCount: boolean,
+  // true = นับจำนวนอย่างเดียว ไม่ดึงแถว (ใช้กับตัวเลขสรุปตามสถานะ)
+  headOnly = false,
 ) {
   // ใช้ !inner เฉพาะตอนกรองศูนย์ — ถ้าใช้ตลอด staff ศูนย์ต้นทางจะมองไม่เห็นรายการ
   // ที่ส่งไปศูนย์อื่น (RLS ของ requests ซ่อนคำขอศูนย์อื่น แล้ว inner join ตัดแถวทิ้ง)
@@ -48,7 +50,7 @@ export function historyQuery(
     .from('allocations')
     .select(
       `id, quantity_allocated, received_quantity, delivery_note, status, allocated_at, allocated_by, delivered_at, cancel_reason, allocated_by_name, delivered_by_name, cancelled_by_name, ${requestEmbed}(item_name, center_id, centers(name)), donations(item_name, unit, centers(name))`,
-      withCount ? { count: 'exact' } : undefined,
+      withCount ? { count: 'exact', head: headOnly } : undefined,
     )
     .order('allocated_at', { ascending: false })
   if (filters.status) query = query.eq('status', filters.status)

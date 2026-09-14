@@ -2,6 +2,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries'
 import type { Locale } from '@/lib/i18n/locale'
 import { ErrorDialog } from '../allocations/error-dialog'
 import { DeliverButton } from '../allocations/deliver-dialog'
+import { FlashNotice } from '../flash-notice'
 import { confirmReceipt } from './actions'
 
 type RequestRow = {
@@ -17,7 +18,7 @@ type Props = {
   dict: Dictionary; locale: Locale; name: string; error?: string
   center: { name: string; type: string; address: string | null; contact_phone: string | null } | null
   requests: RequestRow[]; pending: Delivery[]; history: Delivery[]
-  counts: (number | null)[]; loadError: boolean
+  counts: (number | null)[]; loadError: boolean; notice?: string | null
   failed: { requests: boolean; pending: boolean; history: boolean }
 }
 
@@ -32,7 +33,7 @@ function Icon({ kind = 0 }: { kind?: number }) {
   return <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[kind]} /></svg>
 }
 
-export function VolunteerDashboard({ dict, locale, name, center, requests, pending, history, counts, error, failed, loadError }: Props) {
+export function VolunteerDashboard({ dict, locale, name, center, requests, pending, history, counts, error, failed, loadError, notice }: Props) {
   const t = dict.volunteerDashboard
   const v = dict.volunteer
   const number = new Intl.NumberFormat(locale === 'th' ? 'th-TH' : 'en-US')
@@ -66,7 +67,9 @@ export function VolunteerDashboard({ dict, locale, name, center, requests, pendi
       button: v.confirmReceived, title: a.deliverTitle, message: a.deliverMessage,
       allocated: a.allocatedQuantity, received: a.receivedQuantity, note: a.deliveryNote,
       notePlaceholder: a.deliveryNotePlaceholder, noteRequired: a.deliveryNoteRequired,
-      back: a.close, submit: a.deliverSubmit,
+      back: a.close, submit: a.deliverSubmit, receivedFull: a.receivedFull,
+      receivedPartial: a.receivedPartial, receivedInvalid: a.receivedInvalid,
+      noteTooShort: a.noteTooShort, saving: dict.common.saving,
     }}
   />
 
@@ -80,6 +83,7 @@ export function VolunteerDashboard({ dict, locale, name, center, requests, pendi
     </header>
 
     {error && <ErrorDialog key={error} title={dict.allocations.errorTitle} message={error} closeLabel={dict.allocations.close} clearHref="/volunteer" />}
+    {notice && <FlashNotice key={notice} message={notice} clearHref="/volunteer" closeLabel={dict.allocations.close} />}
     {loadError && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">{t.loadError}</p>}
 
     <section aria-label={t.overview} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
