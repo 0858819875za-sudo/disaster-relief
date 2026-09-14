@@ -1,6 +1,7 @@
 // =====================================================================
 // หน้ารายการคำขอ (F4) — เรียงตามความเร่งด่วน
 // staff เห็นเฉพาะศูนย์ตัวเอง / admin เห็นทุกศูนย์ (บังคับด้วย RLS)
+// ยกเลิกคำขอได้ (cancel_request) — คืนยอดรายการจัดสรรที่ยังไม่ส่งมอบให้อัตโนมัติ
 // =====================================================================
 
 import Link from 'next/link'
@@ -9,8 +10,15 @@ import { requireStaffOrAdmin } from '@/lib/guard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import { ErrorDialog } from '../allocations/error-dialog'
+import { CancelRequestButton } from './cancel-request-dialog'
 
-export default async function RequestsPage() {
+export default async function RequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
   const supabase = await createClient()
   await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -39,10 +47,19 @@ export default async function RequestsPage() {
   const { data: requestRows } = await supabase
     .from('requests')
     .select(
-      'id, item_name, category, quantity_requested, quantity_fulfilled, urgency, status, created_at, centers(name)',
+      'id, item_name, category, unit, quantity_requested, quantity_fulfilled, urgency, status, cancel_reason, created_at, centers(name)',
     )
     .order('created_at', { ascending: false })
   const requests = requestRows ? sortByUrgency(requestRows) : null
+
+  const cancelLabels = {
+    button: dict.requests.cancelRequest,
+    message: dict.requests.cancelRequestConfirm,
+    reasonLabel: dict.allocations.cancelReasonLabel,
+    reasonPlaceholder: dict.requests.cancelRequestReasonPlaceholder,
+    back: dict.allocations.close,
+    submit: dict.requests.cancelRequestSubmit,
+  }
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -59,13 +76,23 @@ export default async function RequestsPage() {
         </Link>
       </header>
 
+      {error && (
+        <ErrorDialog
+          key={error}
+          title={dict.allocations.errorTitle}
+          message={error}
+          closeLabel={dict.allocations.close}
+          clearHref="/requests"
+        />
+      )}
+
       {!requests || requests.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">
           {dict.requests.noRequests}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <table className="w-full min-w-[640px] whitespace-nowrap text-left text-sm">
+          <table className="w-full min-w-[760px] whitespace-nowrap text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-2 font-medium">{dict.requests.center}</th>
@@ -74,11 +101,12 @@ export default async function RequestsPage() {
                 <th className="px-4 py-2 font-medium">{dict.requests.fulfilled}</th>
                 <th className="px-4 py-2 font-medium">{dict.requests.urgency}</th>
                 <th className="px-4 py-2 font-medium">{dict.common.status}</th>
+                <th className="px-4 py-2 font-medium">{dict.requests.actions}</th>
               </tr>
             </thead>
             <tbody>
               {requests.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                <tr key={r.id} className="border-b border-slate-100 align-top last:border-0 dark:border-slate-800">
                   <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
                     {(r.centers as unknown as { name?: string } | null)?.name ?? '—'}
                   </td>
@@ -88,8 +116,12 @@ export default async function RequestsPage() {
                       ({CATEGORY_LABEL[r.category] ?? r.category})
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{r.quantity_requested}</td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{r.quantity_fulfilled}</td>
+                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
+                    {r.quantity_requested} {r.unit ?? ''}
+                  </td>
+                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
+                    {r.quantity_fulfilled} {r.unit ?? ''}
+                  </td>
                   <td className="px-4 py-2">
                     <span
                       className={
@@ -103,7 +135,19 @@ export default async function RequestsPage() {
                       {URGENCY_LABEL[r.urgency] ?? r.urgency}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{STATUS_LABEL[r.status] ?? r.status}</td>
+                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
+                    {STATUS_LABEL[r.status] ?? r.status}
+                    {r.status === 'cancelled' && r.cancel_reason && (
+                      <span className="mt-1 block max-w-[220px] whitespace-normal text-xs text-slate-500 dark:text-slate-400">
+                        {dict.requests.cancelledReason}: {r.cancel_reason}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    {(r.status === 'pending' || r.status === 'partial') && (
+                      <CancelRequestButton id={r.id} itemName={r.item_name} labels={cancelLabels} />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

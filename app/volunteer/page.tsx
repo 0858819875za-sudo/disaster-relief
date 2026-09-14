@@ -58,7 +58,7 @@ export default async function VolunteerPage({
       .eq('status', 'allocated').eq('requests.center_id', centerId)
       .order('allocated_at', { ascending: true }) : Promise.resolve(empty),
     centerId ? supabase.from('allocations')
-      .select('id, quantity_allocated, delivered_at, requests!inner(item_name, center_id), donations(unit)')
+      .select('id, quantity_allocated, received_quantity, delivered_at, requests!inner(item_name, center_id), donations(unit)')
       .eq('status', 'delivered').eq('requests.center_id', centerId)
       .order('delivered_at', { ascending: false }).limit(5) : Promise.resolve(empty),
     centerId ? supabase.from('allocations')
