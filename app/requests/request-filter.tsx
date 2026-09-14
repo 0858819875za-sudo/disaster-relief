@@ -1,0 +1,56 @@
+"use client";
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+const FILTERS = [
+  { label: "ทั้งหมด", value: "" },
+  { label: "อาหาร", value: "food" },
+  { label: "น้ำ", value: "water" },
+  { label: "ยา", value: "medicine" },
+  { label: "เสื้อผ้า", value: "clothing" },
+  { label: "สุขอนามัย", value: "hygiene" },
+  { label: "อื่น ๆ", value: "other" },
+];
+
+export function RequestFilter() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const { replace } = useRouter();
+
+  const handleFilter = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+
+    const query = params.toString();
+    replace(query ? `${pathname}?${query}` : pathname);
+  };
+
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {FILTERS.map((filter) => {
+        const isActive = (searchParams.get("category") ?? "") === filter.value;
+
+        return (
+          <button
+            key={filter.value || "all"}
+            type="button"
+            onClick={() => handleFilter("category", filter.value)}
+            className={[
+              "rounded-full border px-3 py-1.5 text-sm transition",
+              isActive
+                ? "border-brand bg-brand text-white"
+                : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300",
+            ].join(" ")}
+          >
+            {filter.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

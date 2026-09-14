@@ -9,8 +9,14 @@ import { requireStaffOrAdmin } from '@/lib/guard'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import { RequestFilter } from './request-filter'
 
-export default async function RequestsPage() {
+export default async function RequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string; urgency?: string }>
+}) {
+  const { q, category, urgency } = await searchParams
   const supabase = await createClient()
   await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -36,12 +42,26 @@ export default async function RequestsPage() {
     cancelled: dict.requests.statusCancelled,
   }
 
-  const { data: requestRows } = await supabase
+  let requestQuery = supabase
     .from('requests')
     .select(
       'id, item_name, category, quantity_requested, quantity_fulfilled, urgency, status, created_at, centers(name)',
     )
     .order('created_at', { ascending: false })
+
+  if (q) {
+    requestQuery = requestQuery.ilike('item_name', `%${q}%`)
+  }
+
+  if (category) {
+    requestQuery = requestQuery.eq('category', category)
+  }
+
+  if (urgency) {
+    requestQuery = requestQuery.eq('urgency', urgency)
+  }
+
+  const { data: requestRows } = await requestQuery
   const requests = requestRows ? sortByUrgency(requestRows) : null
 
   return (
@@ -58,6 +78,21 @@ export default async function RequestsPage() {
           {dict.requests.addNew}
         </Link>
       </header>
+
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">ตัวกรอง</h2>
+          {q || category || urgency ? (
+            <Link
+              href="/requests"
+              className="text-xs font-medium text-brand hover:text-brand-deep"
+            >
+              ล้างตัวกรอง
+            </Link>
+          ) : null}
+        </div>
+        <RequestFilter />
+      </div>
 
       {!requests || requests.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">
