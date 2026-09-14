@@ -227,7 +227,7 @@ begin
       perform pg_temp.act_as(v_vol);
       perform public.mark_delivered(v_alloc, 25, 'ถุงขาด 5 ถุง');
       select format('OK fulfilled=%s status=%s received=%s by_volunteer=%s lot=%s',
-                    r2.quantity_fulfilled, r2.status, a.received_quantity, a.delivered_by = v_vol,
+                    r2.quantity_fulfilled, r2.status, a.received_quantity, (a.delivered_by = v_vol)::text,
                     (select quantity_remaining from public.donations where id = v_lot_a))
         into v_actual
         from public.allocations a join public.requests r2 on r2.id = a.request_id
