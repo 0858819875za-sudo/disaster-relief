@@ -10,46 +10,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { BrandMark } from './brand-mark'
+import { EntryHub } from './entry-hub'
 import { getLocale } from '@/lib/i18n/locale'
-import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries'
-
-function EntryHub({ dict }: { dict: Dictionary }) {
-  const CHOICES = [
-    { href: '/login', icon: '🧑‍💼', label: dict.entryHub.staffLabel, desc: dict.entryHub.staffDesc },
-    { href: '/register', icon: '🙋', label: dict.entryHub.volunteerLabel, desc: dict.entryHub.volunteerDesc },
-    { href: '/pledge', icon: '❤️', label: dict.entryHub.donateLabel, desc: dict.entryHub.donateDesc },
-    { href: '/help-request', icon: '🆘', label: dict.entryHub.helpLabel, desc: dict.entryHub.helpDesc },
-  ]
-
-  return (
-    <main className="brand-hero-bg flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="relative z-10 w-full max-w-2xl">
-        <header className="mb-8 text-center">
-          <div className="mb-3 flex justify-center">
-            <BrandMark size="lg" />
-          </div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{dict.entryHub.title}</h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{dict.entryHub.subtitle}</p>
-        </header>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {CHOICES.map((c) => (
-            <Link
-              key={c.href}
-              href={c.href}
-              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand dark:border-slate-700 dark:bg-slate-900"
-            >
-              <div className="text-2xl">{c.icon}</div>
-              <h2 className="mt-2 font-medium text-slate-900 dark:text-slate-100">{c.label}</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{c.desc}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </main>
-  )
-}
+import { getDictionary } from '@/lib/i18n/dictionaries'
 
 export default async function HomePage() {
   const supabase = await createClient()
