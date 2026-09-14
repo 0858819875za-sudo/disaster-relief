@@ -2,6 +2,7 @@ import { createDonation } from '../actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { createClient } from '@/lib/supabase/server'
+import { requireStaffOrAdmin } from '@/lib/guard'
 import { getCenterPicker } from '@/lib/center-choice'
 import { CenterSelect } from '@/app/center-select'
 
@@ -13,7 +14,9 @@ export default async function NewDonationPage({
   const { error } = await searchParams
   const locale = await getLocale()
   const dict = getDictionary(locale)
-  const centers = await getCenterPicker(await createClient(), 'warehouse')
+  const supabase = await createClient()
+  await requireStaffOrAdmin(supabase)
+  const centers = await getCenterPicker(supabase, 'warehouse')
 
   return (
     <main className="mx-auto w-full max-w-lg px-6 py-12">
