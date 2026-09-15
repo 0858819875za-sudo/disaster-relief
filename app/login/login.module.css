@@ -13,8 +13,10 @@
 }
 .artwork { position: absolute; z-index: -1; inset: 0; background: url('/images/entry-relief.webp') center bottom / cover no-repeat; pointer-events: none; }
 .back { position: absolute; left: 24px; top: 16px; }
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px 210px; align-items: start; gap: 36px; width: 100%; max-width: 1190px; margin-inline: auto; }
-.intro { padding-top: 16px; }
+/* ฟอร์มอยู่กึ่งกลางจอเสมอ: คอลัมน์ซ้าย/ขวากว้างเท่ากัน ข้อความฝั่งซ้ายชิดฟอร์ม
+   จุดเด่นฝั่งขวาชิดฟอร์ม (เดิมคอลัมน์ขวาคงที่ 210px ทำให้ฟอร์มเยื้องขวาเมื่อจอกว้าง) */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px minmax(0, 1fr); align-items: start; gap: 36px; width: 100%; max-width: 1240px; margin-inline: auto; }
+.intro { padding-top: 16px; justify-self: end; width: 100%; max-width: 380px; }
 .brand { margin-bottom: 24px; }
 .brand > span { gap: 14px; }
 .brand > span > svg { width: 46px; height: 46px; }
@@ -47,7 +49,7 @@
 .support { display: flex; justify-content: center; align-items: start; gap: 10px; margin-top: 22px; padding-top: 20px; border-top: 1px solid #dce5ec; color: var(--muted); font-size: 12px; line-height: 1.8; text-wrap: pretty; }
 .support svg { flex-shrink: 0; width: 18px; height: 18px; margin-top: 2px; }
 .error { border-radius: 8px; padding: 10px 12px; color: #b42330; background: #fff0f0; font-size: 14px; }
-.features { display: grid; gap: 30px; padding-top: 65px; }
+.features { display: grid; gap: 30px; padding-top: 65px; justify-self: start; width: 100%; max-width: 280px; }
 .feature { display: flex; align-items: start; gap: 12px; }
 .feature > span { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; }
 .feature svg { width: 24px; height: 24px; }
@@ -70,14 +72,14 @@
 :global(.dark) .error { color: #ffb1b8; background: #532b36; }
 @media (max-width: 1100px) {
   .layout { max-width: 880px; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; }
-  .features { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); padding: 22px; gap: 20px; border-radius: 16px; background: #fcf7edf0; }
+  .features { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); padding: 22px; gap: 20px; border-radius: 16px; background: #fcf7edf0; justify-self: stretch; max-width: none; }
   :global(.dark) .features { background: #17293bf0; }
 }
 @media (max-width: 700px) {
   .hero { padding: 88px 20px 36px; }
   .back { left: 16px; top: 12px; }
   .layout { max-width: 420px; grid-template-columns: minmax(0, 1fr); gap: 26px; }
-  .intro { padding-top: 0; text-align: center; }
+  .intro { padding-top: 0; text-align: center; justify-self: stretch; max-width: none; }
   .brand { margin-bottom: 14px; }
   .brand > span > svg { width: 36px; height: 36px; }
   .intro h2 { font-size: 20px; }
