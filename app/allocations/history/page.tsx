@@ -230,18 +230,11 @@ export default async function AllocationHistoryPage({
           </Link>
         )}
         {row.canCancel && (
-          <details className="relative">
-            <summary className={`${smallBtn} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
-              {t.moreActions} ▾
-            </summary>
-            <div className="absolute right-0 z-10 mt-1 w-52 rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-              <CancelAllocationButton
-                id={row.a.id}
-                labels={cancelLabels}
-                triggerClassName="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-              />
-            </div>
-          </details>
+          <CancelAllocationButton
+            id={row.a.id}
+            labels={cancelLabels}
+            triggerClassName="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
+          />
         )}
       </div>
       {row.minutesLeft > 0 && (
