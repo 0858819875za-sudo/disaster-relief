@@ -12,8 +12,9 @@
 .intro h2 span { display: block; color: #d9534f; font-size: clamp(26px, 2.5vw, 34px); }
 .intro > p { margin-top: 18px; font-size: 15px; line-height: 1.8; color: var(--muted); }
 .intro blockquote, .thanks { margin-top: 32px; font-size: 21px; font-weight: 600; line-height: 1.7; text-wrap: balance; }
-/* เส้นโค้งใต้คำขวัญ — แบบเดียวกับหน้าแรก (ขอบบนของวงรี) ชิดซ้ายตามข้อความ ไม่เอียงเฉียงแบบเดิม */
-.intro blockquote::after, .thanks::after { content: ''; display: block; width: 120px; height: 10px; margin-top: 8px; border-top: 3px solid #d97b72; border-radius: 50%; }
+/* คำขวัญแบบลายมือ เหมือนหน้าแรก: ข้อความเอียง จัดกลาง พร้อมเส้นโค้งสีแดงใต้ข้อความ */
+.intro blockquote, .thanks { width: fit-content; max-width: 210px; text-align: center; transform: rotate(-8deg); transform-origin: left center; }
+.intro blockquote::after, .thanks::after { content: ''; display: block; width: 140px; height: 14px; margin: 8px auto 0; border-top: 4px solid #d97b72; border-radius: 50%; transform: rotate(-6deg); }
 .intro blockquote span, .thanks span { color: #d9534f; }
 .thanks { font-size: 18px; }
 .form { display: grid; gap: 10px; margin-top: 12px; }
@@ -27,8 +28,8 @@
 :global(.dark) .form input, :global(.dark) .form select, :global(.dark) .form textarea { background: #102131; border-color: #465e73; }
 :global(.dark) .form input::placeholder, :global(.dark) .form textarea::placeholder { color: #93a9bc; }
 :global(.dark) .notice { background: #243e53; color: #bedbef; }
-@media (max-width: 1100px) { .layout { max-width: 850px; grid-template-columns: minmax(0, 1fr) 450px; gap: 28px; } .thanks { grid-column: 1 / -1; margin-top: 0; text-align: center; } .thanks::after { margin-inline: auto; } }
-@media (max-width: 700px) { .brand { top: 20px; left: 20px; } .layout { max-width: 460px; grid-template-columns: minmax(0, 1fr); gap: 26px; } .intro { padding-top: 0; text-align: center; justify-self: stretch; max-width: none; } .intro h2 { font-size: 20px; } .intro h2 span { font-size: 28px; } .intro > p { font-size: 14px; } .intro blockquote { margin-top: 20px; font-size: 18px; } .intro blockquote::after { margin-inline: auto; } .form input, .form select, .form textarea { font-size: 16px; } }
+@media (max-width: 1100px) { .layout { max-width: 850px; grid-template-columns: minmax(0, 1fr) 450px; gap: 28px; } .thanks { grid-column: 1 / -1; margin: 0 auto; transform: none; } }
+@media (max-width: 700px) { .brand { top: 20px; left: 20px; } .layout { max-width: 460px; grid-template-columns: minmax(0, 1fr); gap: 26px; } .intro { padding-top: 0; text-align: center; justify-self: stretch; max-width: none; } .intro h2 { font-size: 20px; } .intro h2 span { font-size: 28px; } .intro > p { font-size: 14px; } .intro blockquote { margin: 20px auto 0; font-size: 18px; transform: none; } .intro blockquote::after { transform: none; } .form input, .form select, .form textarea { font-size: 16px; } }
 @media (max-width: 400px) { .row { grid-template-columns: 1fr; gap: 14px; } }
 @media (min-width: 1101px) {
   .hero.hero { height: 100svh; min-height: 0; padding: 68px 32px 16px; }
