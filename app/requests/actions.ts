@@ -7,6 +7,7 @@ import { resolveCenterId } from '@/lib/center-choice'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { translateAllocationError } from '@/lib/allocation-errors'
+import { withNotice } from '@/lib/notice'
 
 export async function createRequest(formData: FormData) {
   const supabase = await createClient()
@@ -43,7 +44,7 @@ export async function createRequest(formData: FormData) {
 // และคืนยอดรายการจัดสรรที่ยังไม่ส่งมอบให้ใน transaction เดียว
 export async function cancelRequest(formData: FormData) {
   const supabase = await createClient()
-  const { error } = await supabase.rpc('cancel_request', {
+  const { data: returned, error } = await supabase.rpc('cancel_request', {
     p_request_id: String(formData.get('id')),
     p_reason: String(formData.get('reason') ?? ''),
   })
@@ -54,5 +55,7 @@ export async function cancelRequest(formData: FormData) {
   for (const path of ['/requests', '/allocations', '/allocations/history', '/inventory', '/donations', '/volunteer', '/']) {
     revalidatePath(path)
   }
-  redirect('/requests')
+  revalidatePath('/', 'layout')
+  // cancel_request คืนจำนวนรายการจัดสรรที่ถูกยกเลิกและคืนยอด
+  redirect(withNotice('/requests', 'request_cancelled', { n: Number(returned) || 0 }))
 }

@@ -1,28 +1,31 @@
 // =====================================================================
 // Web Component ที่เลือกสำหรับ F5 (docs/Week10_Topic8_Analysis.md ข้อ 9):
 // Modal Dialog ยืนยันการตัดจ่าย — เพราะการจัดสรรกระทบยอดคงเหลือจริงและ
-// ย้อนกลับยาก (ต้องให้ admin ยกเลิกเองทีหลัง) การบังคับให้เห็นสรุปก่อนกด
-// ยืนยันจึงลดความเสี่ยงกดพลาดตอนเจ้าหน้าที่ทำงานเร่งรีบ
+// ย้อนกลับยาก การบังคับให้เห็นสรุปก่อนกดยืนยันจึงลดความเสี่ยงกดพลาดตอนเจ้าหน้าที่ทำงานเร่งรีบ
 //
 // ใช้ <dialog> ของ HTML ล้วนๆ (ไม่ใช้ library) — ได้ focus trap +
 // ปิดด้วย Esc + backdrop ฟรีจากเบราว์เซอร์
 //
-// จับคู่อัตโนมัติ: พอเลือกคำขอ ระบบแยกล็อตเป็น 2 กลุ่ม
-//   - ล็อตที่ "ชื่อของตรงกับคำขอ" (lib/item-match.ts) เรียงใกล้หมดอายุก่อน (FEFO)
-//     และเติมจำนวนให้ไล่จากล็อตแรกจนครบที่ขาด — เติมเฉพาะล็อตที่ชื่อตรงเป๊ะ
-//     (หลังตัดขนาด) ก่อน ถ้าไม่มีเลยจึงเติมจากล็อตที่ชื่อคล้าย เช่น "ข้าวสาร" ↔ "ข้าวสารหอมมะลิ"
-//   - ล็อตอื่นในหมวดเดียวกัน (ของทดแทน) ซ่อนไว้ ถ้าจะใช้ต้องติ๊กยืนยันใน Modal
-// หมวดหมู่ / ศูนย์ (staff) / วันหมดอายุ / ยอดคงเหลือ ยังบังคับซ้ำใน
+// ขั้นตอนบนหน้าจอ:
+//   ซ้าย: คำขอเป็นการ์ด ค้นหาได้ กรอง "มีของพร้อมจ่าย" / "ด่วน" ได้ มีแถบความคืบหน้า
+//   ขวา: ล็อตที่ "ชื่อของตรงกับคำขอ" (lib/item-match.ts) เรียงใกล้หมดอายุก่อน (FEFO)
+//        และเติมจำนวนให้ไล่จากล็อตแรกจนครบที่ขาด — เติมเฉพาะล็อตที่ชื่อตรงเป๊ะก่อน
+//        ล็อตอื่นในหมวดเดียวกัน (ของทดแทน) ซ่อนไว้ ถ้าจะใช้ต้องติ๊กยืนยันใน Modal
+// ข้อความผิดพลาดขึ้นหลังผู้ใช้เริ่มแก้ตัวเลขหรือกดยืนยันเท่านั้น (ไม่ดุตั้งแต่ยังไม่ทำอะไร)
+// หมวดหมู่ / ศูนย์ (staff) / หน่วย / วันหมดอายุ / ยอดคงเหลือ ยังบังคับซ้ำใน
 // allocate_items_multi → allocate_items อีกชั้น
 // =====================================================================
 
 'use client'
 
+import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { allocate } from './actions'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import { itemCore, itemsMatch } from '@/lib/item-match'
 import { unitLabel } from '@/lib/units'
+import { formatDateOnly } from '@/lib/dates'
+import { SubmitButton } from '../submit-button'
 
 type Req = {
   id: string
@@ -30,6 +33,7 @@ type Req = {
   item_name: string
   category: string
   unit: string | null
+  urgency: string
   quantity_requested: number
   quantity_fulfilled: number
   centers: { name?: string } | null
@@ -45,13 +49,17 @@ type Don = {
   expiry_date: string | null
   received_at: string
   centers: { name?: string } | null
+  // คำนวณที่ server ตามวันที่เวลาไทย — null = ไม่มีวันหมดอายุ
+  days_left: number | null
 }
 
-const DAY_MS = 1000 * 60 * 60 * 24
-
-// อยู่นอก component เพราะอ่านเวลาปัจจุบัน — เรียกเฉพาะใน event handler
-function daysUntil(dateStr: string) {
-  return (new Date(dateStr).getTime() - Date.now()) / DAY_MS
+const panel = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900'
+const secondaryBtn =
+  'inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+const URGENCY_STYLE: Record<string, string> = {
+  high: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400',
+  medium: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
+  low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 }
 
 // เติมจำนวนแบบ FEFO: ไล่จากล็อตที่ใกล้หมดอายุที่สุดจนครบจำนวนที่คำขอยังขาด
@@ -72,15 +80,19 @@ export function AllocateForm({
   dict,
   isAdmin,
   locale,
+  initialRequestId,
 }: {
   requests: Req[]
   donations: Don[]
   dict: Dictionary
   isAdmin: boolean
   locale: string
+  initialRequestId: string
 }) {
+  const t = dict.allocations
   const formRef = useRef<HTMLFormElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const detailRef = useRef<HTMLElement>(null)
   const confirmedRef = useRef(false)
 
   const CATEGORY_LABEL: Record<string, string> = {
@@ -91,14 +103,23 @@ export function AllocateForm({
     hygiene: dict.form.categoryHygiene,
     other: dict.form.categoryOther,
   }
+  const URGENCY_LABEL: Record<string, string> = {
+    high: dict.requests.urgencyHigh,
+    medium: dict.requests.urgencyMedium,
+    low: dict.requests.urgencyLow,
+  }
 
-  const [requestId, setRequestId] = useState('')
+  // เปิดจากปุ่ม "จัดสรร" ในหน้าคำขอ (?request=<id>) → เลือกคำขอนั้นไว้ให้เลย
+  const [requestId, setRequestId] = useState(() =>
+    requests.some((r) => r.id === initialRequestId) ? initialRequestId : '',
+  )
   // เก็บเฉพาะตัวเลขที่ผู้ใช้แก้เอง (ผูกกับคำขอ) — ถ้ายังไม่แก้ ใช้แผน FEFO ที่คำนวณสดทุกครั้ง
-  // จึงไม่พึ่ง onChange ของ select (กันกรณีเบราว์เซอร์คืนค่าฟอร์มเองแล้วช่องจำนวนว่าง)
   const [edits, setEdits] = useState<{ requestId: string; qty: Record<string, string> } | null>(null)
   const [showOthers, setShowOthers] = useState(false)
   const [substituteOk, setSubstituteOk] = useState(false)
-  const [nearExpiry, setNearExpiry] = useState(false)
+  const [touched, setTouched] = useState(false)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<'all' | 'ready' | 'urgent'>('all')
 
   const selectedRequest = requests.find((r) => r.id === requestId)
   const sameCategoryLots = selectedRequest
@@ -131,7 +152,8 @@ export function AllocateForm({
   const plan = selectedRequest
     ? fefoPlan(selectedRequest, exactLots.length > 0 ? exactLots : matchedLots)
     : {}
-  const qtyByLot = edits && edits.requestId === requestId ? edits.qty : plan
+  const hasEdits = !!edits && edits.requestId === requestId
+  const qtyByLot = hasEdits ? edits.qty : plan
 
   const entries = [...matchedLots, ...otherLots].map((lot) => {
     const raw = qtyByLot[lot.id] ?? ''
@@ -142,22 +164,29 @@ export function AllocateForm({
   const usesSubstitute = chosen.some((e) => !e.matched)
   const mixedUnits = new Set(chosen.map((e) => e.lot.unit.trim())).size > 1
   const othersVisible = showOthers || entries.some((e) => !e.matched && e.raw !== '')
+  const nearExpiry = chosen.some((c) => c.lot.days_left !== null && c.lot.days_left <= 7)
 
   const problem = !selectedRequest
     ? null
     : chosen.some((e) => !Number.isInteger(e.qty) || e.qty < 0)
-      ? dict.allocations.invalidQty
+      ? t.invalidQty
       : chosen.length === 0
-        ? dict.allocations.noLotSelected
+        ? t.noLotSelected
         : chosen.some((e) => e.qty > e.lot.quantity_remaining)
-          ? dict.allocations.overRemaining
+          ? t.overRemaining
           : total > requestRemaining
-            ? dict.allocations.overRequested
+            ? t.overRequested
             : null
   const canConfirm = !problem && (!usesSubstitute || substituteOk)
 
-  const itemsJson = JSON.stringify(
-    chosen.map((e) => ({ donation_id: e.lot.id, quantity: e.qty })),
+  const itemsJson = JSON.stringify(chosen.map((e) => ({ donation_id: e.lot.id, quantity: e.qty })))
+  const unitText = selectedRequest?.unit ? ` ${unitLabel(selectedRequest.unit, locale)}` : ''
+
+  const needle = query.trim().toLocaleLowerCase()
+  const visibleRequests = requests.filter(
+    (r) =>
+      (!needle || `${r.centers?.name ?? ''} ${r.item_name}`.toLocaleLowerCase().includes(needle)) &&
+      (filter === 'all' || (filter === 'ready' && r.ready) || (filter === 'urgent' && r.urgency === 'high')),
   )
 
   function selectRequest(id: string) {
@@ -165,24 +194,25 @@ export function AllocateForm({
     setEdits(null)
     setShowOthers(false)
     setSubstituteOk(false)
+    setTouched(false)
+    // จอแคบรายการคำขออยู่ด้านบน — เลื่อนลงไปที่ส่วนกรอกจำนวนให้เห็นทันที
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
   }
 
   function setQty(lotId: string, value: string) {
     setEdits({ requestId, qty: { ...qtyByLot, [lotId]: value } })
     setSubstituteOk(false)
+    setTouched(true)
   }
 
   function handleSubmit(e: React.FormEvent) {
     if (confirmedRef.current) return // ผ่านมาจากปุ่ม "ยืนยัน" ในโมดัลแล้ว ปล่อยให้ submit จริง
     e.preventDefault()
     if (!selectedRequest) return
-    setNearExpiry(
-      chosen.some((c) => {
-        if (!c.lot.expiry_date) return false
-        const days = daysUntil(c.lot.expiry_date)
-        return days >= -1 && days <= 7
-      }),
-    )
+    setTouched(true)
+    if (problem) return
     dialogRef.current?.showModal()
   }
 
@@ -200,41 +230,71 @@ export function AllocateForm({
   const receivedLabel = (value: string) =>
     new Date(value).toLocaleDateString(dateLocale, { dateStyle: 'medium', timeZone: 'Asia/Bangkok' })
 
-  function lotRow({ lot, raw, matched }: (typeof entries)[number]) {
+  function filterChip(value: 'all' | 'ready' | 'urgent', label: string) {
+    const active = filter === value
     return (
-      <tr key={lot.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
-          <span className="block">
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={() => setFilter(value)}
+        className={`rounded-full border px-3 py-1 text-xs font-medium ${
+          active
+            ? 'border-brand bg-brand text-white dark:border-sky-500 dark:bg-sky-600'
+            : 'border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'
+        }`}
+      >
+        {label}
+      </button>
+    )
+  }
+
+  function lotRow({ lot, raw, qty, matched }: (typeof entries)[number]) {
+    const invalid = touched && raw !== '' && (!Number.isInteger(qty) || qty < 0 || qty > lot.quantity_remaining)
+    const unit = unitLabel(lot.unit, locale)
+    return (
+      <li key={lot.id} className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_150px_150px] sm:items-center">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900 dark:text-slate-100">
             {lot.item_name}
             {!matched && (
-              <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                {dict.allocations.substituteBadge}
+              <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                {t.substituteBadge}
               </span>
             )}
-          </span>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">
-            {lot.centers?.name} · {dict.allocations.receivedOn} {receivedLabel(lot.received_at)}
-          </span>
-        </td>
-        <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-          {lot.quantity_remaining} {unitLabel(lot.unit, locale)}
-        </td>
-        <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{lot.expiry_date ?? '—'}</td>
-        <td className="px-4 py-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              max={lot.quantity_remaining}
-              value={raw}
-              onChange={(e) => setQty(lot.id, e.target.value)}
-              aria-label={`${dict.allocations.quantityToAllocate} — ${lot.item_name} (${lot.centers?.name ?? ''})`}
-              className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            />
-            <span className="text-xs text-slate-500 dark:text-slate-400">{unitLabel(lot.unit, locale)}</span>
-          </div>
-        </td>
-      </tr>
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            {lot.centers?.name} · {t.receivedOn} {receivedLabel(lot.received_at)}
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {t.lotLeft} {lot.quantity_remaining} {unit}
+          </p>
+        </div>
+        <div className="text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs text-slate-500 sm:hidden dark:text-slate-400">{t.expiryHeader}: </span>
+          {formatDateOnly(lot.expiry_date, locale)}
+          {lot.days_left !== null && lot.days_left <= 7 && (
+            <span className="ml-2 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 sm:ml-0 sm:mt-1 sm:block sm:w-fit dark:bg-amber-500/10 dark:text-amber-400">
+              {lot.days_left <= 0 ? t.expiresToday : t.daysLeft.replace('{n}', String(lot.days_left))}
+            </span>
+          )}
+        </div>
+        <label className="flex items-center gap-2">
+          <span className="sr-only">{`${t.quantityToAllocate} — ${lot.item_name} (${lot.centers?.name ?? ''})`}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={lot.quantity_remaining}
+            value={raw}
+            aria-invalid={invalid}
+            onChange={(e) => setQty(lot.id, e.target.value)}
+            className={`w-24 rounded-md border px-2 py-1.5 text-sm dark:bg-slate-800 dark:text-slate-100 ${
+              invalid ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+            }`}
+          />
+          <span className="text-xs text-slate-500 dark:text-slate-400">{unit}</span>
+        </label>
+      </li>
     )
   }
 
@@ -242,7 +302,7 @@ export function AllocateForm({
     <>
       {!isAdmin && (
         <p className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          {dict.allocations.crossCenterNote}
+          {t.crossCenterNote}
         </p>
       )}
 
@@ -250,129 +310,230 @@ export function AllocateForm({
         ref={formRef}
         action={allocate}
         onSubmit={handleSubmit}
-        className="space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+        noValidate
+        className="grid items-start gap-5 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]"
       >
+        <input type="hidden" name="request_id" value={requestId} />
         <input type="hidden" name="items" value={itemsJson} />
 
-        <div>
-          <label htmlFor="allocate-request" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {dict.allocations.selectRequest}
-          </label>
-          <select
-            id="allocate-request"
-            name="request_id"
-            required
-            autoComplete="off"
-            value={requestId}
-            onChange={(e) => selectRequest(e.target.value)}
+        <section aria-labelledby="allocate-requests-title" className={`${panel} p-4`}>
+          <h2 id="allocate-requests-title" className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-200">
+            {t.selectRequest}{' '}
+            <span className="font-normal text-slate-500 dark:text-slate-400">({requests.length})</span>
+          </h2>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.searchRequests}
+            aria-label={t.searchRequests}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          >
-            <option value="">{dict.allocations.selectRequestPlaceholder}</option>
-            {requests.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.centers?.name} — {r.item_name} ({CATEGORY_LABEL[r.category] ?? r.category}) · {dict.allocations.remainingWord}{' '}
-                {r.quantity_requested - r.quantity_fulfilled}
-                {r.unit ? ` ${r.unit}` : ''} · {r.ready ? dict.allocations.readyStock : dict.allocations.noStock}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedRequest && (
-          <div>
-            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300">{dict.allocations.lotsForRequest}</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{dict.allocations.autoFillNote}</p>
-            </div>
-
-            {matchedLots.length === 0 && (
-              <p className="mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                {dict.allocations.noMatchingItemLots}
-              </p>
-            )}
-
-            {(matchedLots.length > 0 || othersVisible) && (
-              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-                <table className="w-full min-w-[640px] whitespace-nowrap text-left text-sm">
-                  <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">{dict.allocations.lotColumn}</th>
-                      <th className="px-4 py-2 font-medium">{dict.allocations.remainingHeader}</th>
-                      <th className="px-4 py-2 font-medium">{dict.allocations.expiryHeader}</th>
-                      <th className="px-4 py-2 font-medium">{dict.allocations.quantityToAllocate}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.filter((e) => e.matched).map(lotRow)}
-                    {othersVisible && otherLots.length > 0 && (
-                      <tr className="bg-amber-50/60 dark:bg-amber-500/5">
-                        <td colSpan={4} className="whitespace-normal px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
-                          {dict.allocations.otherLotsWarning}
-                        </td>
-                      </tr>
-                    )}
-                    {othersVisible && entries.filter((e) => !e.matched).map(lotRow)}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {otherLots.length > 0 && !othersVisible && (
-              <button
-                type="button"
-                onClick={() => setShowOthers(true)}
-                className="mt-2 text-xs font-medium text-slate-600 underline hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-              >
-                {dict.allocations.showOtherLots} ({otherLots.length})
-              </button>
-            )}
-
-            <p className={`mt-2 text-sm ${problem ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
-              {dict.allocations.totalToAllocate} {total} / {dict.allocations.stillNeeded} {requestRemaining}
-              {problem ? ` — ${problem}` : ''}
-            </p>
-            {mixedUnits && !problem && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{dict.allocations.mixedUnitsWarning}</p>
-            )}
-            {hiddenByUnit > 0 && (
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {dict.allocations.unitFilteredNote.replace('{n}', String(hiddenByUnit))}
-              </p>
-            )}
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {filterChip('all', t.filterAll)}
+            {filterChip('ready', t.filterReady)}
+            {filterChip('urgent', t.filterUrgent)}
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={!selectedRequest || categoryLots.length === 0}
-          className="w-full rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {dict.allocations.confirmAllocate}
-        </button>
+          {requests.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{t.noOpenRequests}</p>
+          ) : visibleRequests.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{t.noRequestMatch}</p>
+          ) : (
+            <ul className="mt-3 space-y-2 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
+              {visibleRequests.map((r) => {
+                const remaining = r.quantity_requested - r.quantity_fulfilled
+                const percent =
+                  r.quantity_requested > 0 ? Math.round((r.quantity_fulfilled / r.quantity_requested) * 100) : 0
+                const selected = r.id === requestId
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => selectRequest(r.id)}
+                      className={`w-full rounded-lg border p-3 text-left transition ${
+                        selected
+                          ? 'border-brand bg-slate-50 ring-2 ring-brand/20 dark:border-sky-500 dark:bg-slate-800 dark:ring-sky-500/30'
+                          : 'border-slate-200 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-500'
+                      }`}
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{r.item_name}</span>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${URGENCY_STYLE[r.urgency] ?? URGENCY_STYLE.low}`}
+                        >
+                          {URGENCY_LABEL[r.urgency] ?? r.urgency}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                        {r.centers?.name} · {CATEGORY_LABEL[r.category] ?? r.category}
+                      </span>
+                      <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                        <span
+                          className="block h-full rounded-full bg-sky-600 dark:bg-sky-400"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </span>
+                      <span className="mt-2 flex items-center justify-between gap-2 text-xs">
+                        <span className="text-slate-600 dark:text-slate-300">
+                          {t.stillNeededShort} {remaining}
+                          {r.unit ? ` ${unitLabel(r.unit, locale)}` : ''}
+                        </span>
+                        {r.ready ? (
+                          <span className="text-emerald-700 dark:text-emerald-400">✓ {t.readyStock}</span>
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">{t.noStock}</span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section ref={detailRef} aria-live="polite" className={`${panel} min-w-0 scroll-mt-4 p-4 sm:p-5`}>
+          {!selectedRequest ? (
+            <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">{t.chooseRequestHint}</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{selectedRequest.item_name}</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {selectedRequest.centers?.name} · {t.stillNeededShort} {requestRemaining}
+                    {unitText}
+                  </p>
+                </div>
+                {hasEdits && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEdits(null)
+                      setTouched(false)
+                    }}
+                    className={secondaryBtn}
+                  >
+                    ↺ {t.useSuggested}
+                  </button>
+                )}
+              </div>
+
+              {matchedLots.length > 0 && (
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t.autoFillNote}</p>
+              )}
+
+              {matchedLots.length === 0 && !othersVisible && (
+                <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{t.noLotsTitle}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t.noLotsHint}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {otherLots.length > 0 && (
+                      <button type="button" onClick={() => setShowOthers(true)} className={secondaryBtn}>
+                        {t.viewSubstitutes} ({otherLots.length})
+                      </button>
+                    )}
+                    <Link href="/pledges" className={secondaryBtn}>
+                      {t.viewPledges}
+                    </Link>
+                    <Link href="/donations/new" className={secondaryBtn}>
+                      {t.receiveStock}
+                    </Link>
+                  </div>
+                  {otherLots.length > 0 && (
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t.substituteHint}</p>
+                  )}
+                </div>
+              )}
+
+              {(matchedLots.length > 0 || othersVisible) && (
+                <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+                  <li className="hidden gap-3 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500 sm:grid sm:grid-cols-[minmax(0,1fr)_150px_150px] dark:bg-slate-800 dark:text-slate-400">
+                    <span>{t.lotsForRequest}</span>
+                    <span>{t.expiryHeader}</span>
+                    <span>{t.quantityToAllocate}</span>
+                  </li>
+                  {entries.filter((e) => e.matched).map(lotRow)}
+                  {othersVisible && otherLots.length > 0 && (
+                    <li className="bg-amber-50/60 px-4 py-2 text-xs text-amber-700 dark:bg-amber-500/5 dark:text-amber-400">
+                      {t.otherLotsWarning} {t.substituteHint}
+                    </li>
+                  )}
+                  {othersVisible && entries.filter((e) => !e.matched).map(lotRow)}
+                </ul>
+              )}
+
+              {otherLots.length > 0 && !othersVisible && matchedLots.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowOthers(true)}
+                  className="mt-2 text-xs font-medium text-slate-600 underline hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                >
+                  {t.showOtherLots} ({otherLots.length})
+                </button>
+              )}
+
+              {hiddenByUnit > 0 && (
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {t.unitFilteredNote.replace('{n}', String(hiddenByUnit))}
+                </p>
+              )}
+
+              <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {t.totalToAllocate} {total} / {requestRemaining}
+                    {unitText}
+                  </p>
+                  {touched && problem && (
+                    <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
+                      {problem}
+                    </p>
+                  )}
+                  {mixedUnits && !problem && (
+                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{t.mixedUnitsWarning}</p>
+                  )}
+                </div>
+                <SubmitButton
+                  pendingLabel={dict.common.saving}
+                  disabled={categoryLots.length === 0}
+                  className="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t.reviewAndConfirm} →
+                </SubmitButton>
+              </div>
+            </>
+          )}
+        </section>
       </form>
 
       <dialog
         ref={dialogRef}
+        aria-labelledby="allocate-confirm-title"
         className="m-auto w-full max-w-lg rounded-lg border border-slate-200 p-0 shadow-lg backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900"
       >
         <div className="p-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{dict.allocations.modalTitle}</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{dict.allocations.modalSubtitle}</p>
+          <h2 id="allocate-confirm-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {t.modalTitle}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t.modalSubtitle}</p>
 
           <dl className="mt-4 space-y-2 rounded-md bg-slate-50 p-4 text-sm dark:bg-slate-800">
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500 dark:text-slate-400">{dict.allocations.requestedItem}</dt>
+              <dt className="text-slate-500 dark:text-slate-400">{t.requestedItem}</dt>
               <dd className="text-right font-medium text-slate-900 dark:text-slate-100">{selectedRequest?.item_name ?? '—'}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500 dark:text-slate-400">{dict.allocations.toCenter}</dt>
+              <dt className="text-slate-500 dark:text-slate-400">{t.toCenter}</dt>
               <dd className="text-right font-medium text-slate-900 dark:text-slate-100">{selectedRequest?.centers?.name ?? '—'}</dd>
             </div>
             {chosen.map(({ lot, qty, matched }) => (
               <div key={lot.id} className="flex justify-between gap-4 border-t border-slate-200 pt-2 dark:border-slate-700">
                 <dt className="text-slate-500 dark:text-slate-400">
                   {lot.item_name}
-                  {!matched && <span className="text-amber-700 dark:text-amber-400"> ({dict.allocations.substituteBadge})</span>}
+                  {!matched && <span className="text-amber-700 dark:text-amber-400"> ({t.substituteBadge})</span>}
                   <span className="block text-xs">{lot.centers?.name ?? '—'}</span>
                 </dt>
                 <dd className="text-right font-medium text-slate-900 dark:text-slate-100">
@@ -382,29 +543,29 @@ export function AllocateForm({
                       lot.quantity_remaining - qty < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    {dict.allocations.remainingAfter} {lot.quantity_remaining - qty}
+                    {t.remainingAfter} {lot.quantity_remaining - qty}
                   </span>
                 </dd>
               </div>
             ))}
             <div className="flex justify-between gap-4 border-t border-slate-200 pt-2 dark:border-slate-700">
-              <dt className="text-slate-500 dark:text-slate-400">{dict.allocations.totalToAllocate}</dt>
+              <dt className="text-slate-500 dark:text-slate-400">{t.totalToAllocate}</dt>
               <dd className="text-right font-semibold text-slate-900 dark:text-slate-100">
                 {total} / {requestRemaining}
-                {selectedRequest?.unit ? ` ${selectedRequest.unit}` : ''}
+                {unitText}
               </dd>
             </div>
           </dl>
 
           {nearExpiry && !problem && (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-              {dict.allocations.nearExpiryWarning}
+              {t.nearExpiryWarning}
             </p>
           )}
 
           {mixedUnits && !problem && (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-              {dict.allocations.mixedUnitsWarning}
+              {t.mixedUnitsWarning}
             </p>
           )}
 
@@ -416,7 +577,7 @@ export function AllocateForm({
                 onChange={(e) => setSubstituteOk(e.target.checked)}
                 className="mt-0.5"
               />
-              {dict.allocations.substituteConfirm}
+              {t.substituteConfirm}
             </label>
           )}
 
@@ -440,7 +601,7 @@ export function AllocateForm({
               disabled={!canConfirm}
               className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {dict.allocations.confirmAllocate}
+              {t.confirmAllocate}
             </button>
           </div>
         </div>
