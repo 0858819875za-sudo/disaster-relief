@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Nav } from "./nav";
 import { PublicToggleBar } from "./public-toggle-bar";
 import { getLocale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { SiteFooter } from "./site-footer";
 
 // Sarabun เป็นฟอนต์มาตรฐานที่ใช้ในเอกสารราชการ/ทางการของไทย ใช้กับเนื้อหา/
 // ฟอร์มที่ต้องอ่านยาวๆ เพื่อสื่อความน่าเชื่อถือกับผู้อ่าน โดยเฉพาะกลุ่ม
@@ -89,6 +91,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <PublicToggleBar locale={locale} />
         )}
         {children}
+        {/* ยังไม่ login = footer เต็ม (ลิงก์ประชาชน + เบอร์ติดต่อ) / login แล้ว = บรรทัดเดียว */}
+        <SiteFooter dict={getDictionary(locale)} variant={user ? "slim" : "full"} />
       </body>
     </html>
   );
