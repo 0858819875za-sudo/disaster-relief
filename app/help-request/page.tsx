@@ -9,6 +9,8 @@
 // อยู่จริงๆ และมักใช้มือถือ จึงไม่ใส่ฟิลด์ที่ไม่จำเป็นเพิ่ม
 // =====================================================================
 
+import shared from '../login/login.module.css'
+import styles from '../pledge/pledge.module.css'
 import { createClient } from '@/lib/supabase/server'
 import { submitHelpRequest } from './actions'
 import { BrandMark } from '../brand-mark'
@@ -33,64 +35,53 @@ export default async function HelpRequestPage({
     .eq('is_active', true)
     .order('name')
 
-  return (
-    <main className="brand-hero-bg flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="relative z-10 w-full max-w-sm">
+  const features = [
+    { title: dict.helpRequest.needsTitle, desc: dict.helpRequest.needsDesc, icon: 'list' },
+    { title: dict.helpRequest.contactTitle, desc: dict.helpRequest.contactDesc, icon: 'phone' },
+    { title: dict.helpRequest.localTitle, desc: dict.helpRequest.localDesc, icon: 'people' },
+  ] as const
+  return <main className={`${shared.hero} ${styles.hero}`}>
+    <div className={shared.artwork} aria-hidden="true" />
+    <div className={styles.brand}><BrandMark size="lg" /></div>
+    <div className={styles.layout}>
+      <section className={styles.intro}>
+        <h2>{dict.helpRequest.introTitle}<span>{dict.helpRequest.introAccent}</span></h2>
+        <p>{dict.helpRequest.introDesc}</p>
+        <blockquote>{dict.helpRequest.motto}<span aria-hidden="true"> &hearts;</span></blockquote>
+      </section>
+      <section className={`${shared.panel} ${styles.panel}`} aria-labelledby="help-title">
         <BackHomeLink label={dict.common.backHome} />
-        <div className="mb-8 text-center">
-          <div className="mb-3 flex justify-center">
-            <BrandMark />
-          </div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{dict.helpRequest.title}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{dict.helpRequest.subtitle}</p>
-        </div>
-
-        {ok && (
-          <p className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-            {dict.helpRequest.successMsg}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
-            {error}
-          </p>
-        )}
-
-        {!shelters || shelters.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">
-            {dict.helpRequest.noShelters}
-          </p>
-        ) : (
+        <header className={shared.formHeader}><BrandMark size="lg" /><h1 id="help-title">{dict.helpRequest.title}</h1><p>{dict.helpRequest.subtitle}</p></header>
+        {ok && <p role="status" className={styles.notice}>{dict.helpRequest.successMsg}</p>}
+        {error && <p role="alert" className={shared.error}>{error}</p>}
+        {!shelters || shelters.length === 0 ? <p className={styles.notice}>{dict.helpRequest.noShelters}</p> : (
           <form
             action={submitHelpRequest}
-            className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            className={styles.form}
           >
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{dict.form.name}</label>
-              <input
-                name="requester_name"
+              <label htmlFor="requester_name">{dict.form.name}</label>
+              <input id="requester_name" name="requester_name" autoComplete="name"
                 required
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+<div className={styles.row}>            <div>
+              <label htmlFor="requester_phone">
                 {dict.form.phoneContact}
               </label>
-              <input
-                name="requester_phone"
+              <input id="requester_phone" name="requester_phone" type="tel" autoComplete="tel"
                 required
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               />
-            </div>
+            </div><div><label htmlFor="requester_email">{dict.form.email}</label><input id="requester_email" name="requester_email" type="email" autoComplete="email" placeholder={dict.pledge.emailPlaceholder} /></div></div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="center_id">
                 {dict.helpRequest.nearestShelter}
               </label>
-              <select
-                name="center_id"
+              <select id="center_id" name="center_id"
                 required
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               >
                 <option value="">{dict.form.selectCenterPlaceholder}</option>
                 {shelters.map((s) => (
@@ -101,22 +92,20 @@ export default async function HelpRequestPage({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="item_name">
                 {dict.helpRequest.itemNeeded}
               </label>
-              <input
-                name="item_name"
+              <input id="item_name" name="item_name"
                 required
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={styles.row}>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{dict.form.category}</label>
-                <select
-                  name="category"
+                <label htmlFor="category">{dict.form.category}</label>
+                <select id="category" name="category"
                   required
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  
                 >
                   <option value="food">{dict.form.categoryFood}</option>
                   <option value="water">{dict.form.categoryWater}</option>
@@ -127,24 +116,22 @@ export default async function HelpRequestPage({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{dict.form.quantity}</label>
-                <input
-                  name="quantity"
+                <label htmlFor="quantity">{dict.form.quantity}</label>
+                <input id="quantity" name="quantity"
                   type="number"
                   min={1}
                   required
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="urgency">
                 {dict.helpRequest.urgency}
               </label>
-              <select
-                name="urgency"
+              <select id="urgency" name="urgency"
                 defaultValue="medium"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               >
                 <option value="low">{dict.helpRequest.urgencyLow}</option>
                 <option value="medium">{dict.helpRequest.urgencyMedium}</option>
@@ -152,24 +139,35 @@ export default async function HelpRequestPage({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="note">
                 {dict.form.noteOptional}
               </label>
-              <textarea
-                name="note"
+              <textarea id="note" name="note"
                 rows={2}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                
               />
             </div>
             <button
               type="submit"
-              className="w-full rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-deep"
+              className={shared.submit}
             >
               {dict.helpRequest.submit}
             </button>
           </form>
         )}
-      </div>
-    </main>
-  )
+        <p className={styles.notice}>{dict.helpRequest.followUp}</p>
+      </section>
+      <aside className={shared.features}>
+        {features.map(feature => <div className={shared.feature} key={feature.icon}>
+          <span className={feature.icon === 'list' ? shared.shield : feature.icon === 'phone' ? shared.heart : shared.people}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {feature.icon === 'list' && <><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M8 7h8M8 11h8M8 15h8M8 19h5" /></>}
+              {feature.icon === 'phone' && <path d="m6 3 3 5-2 3a17 17 0 0 0 6 6l3-2 5 3c-1 4-4 4-7 3C7 19 2 13 2 7c0-2 1-4 4-4Z" />}
+              {feature.icon === 'people' && <><circle cx="12" cy="7" r="3" /><path d="M6 21v-3a6 6 0 0 1 12 0v3H6ZM4 4a3 3 0 0 0 0 6m16-6a3 3 0 0 1 0 6M3 15a4 4 0 0 0-2 4v1m20-5a4 4 0 0 1 2 4v1" /></>}
+            </svg>
+          </span><div><h2>{feature.title}</h2><p>{feature.desc}</p></div>
+        </div>)}
+      </aside>
+    </div>
+  </main>
 }

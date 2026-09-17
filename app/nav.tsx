@@ -9,8 +9,29 @@ import type { Locale } from '@/lib/i18n/locale'
 // แสดงเฉพาะตอน login แล้วเท่านั้น (root layout เป็นคนเช็ค user ก่อนค่อยเรียก
 // nav นี้) — /login กับ /pledge (สาธารณะ) จะไม่เห็นแถบนี้เลย
 
-export function Nav({ role, locale }: { role: string | null; locale: Locale }) {
+export function Nav({
+  role,
+  locale,
+  pendingReceipts = 0,
+}: {
+  role: string | null
+  locale: Locale
+  pendingReceipts?: number
+}) {
   const dict = getDictionary(locale)
+
+  // ตัวเลข "รอรับของ" — staff/admin ติดที่เมนูจัดสรร อาสาสมัครติดที่หน้าหลักของตัวเอง
+  // (นับใน root layout: admin = ทั้งระบบ, คนอื่น = ของที่กำลังส่งมาศูนย์ตัวเอง)
+  const badgeHref = role === 'volunteer' ? '/volunteer' : '/allocations'
+  const badge = (href: string) =>
+    href === badgeHref && pendingReceipts > 0 ? (
+      <span
+        aria-label={dict.nav.pendingReceipt.replace('{n}', String(pendingReceipts))}
+        className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-accent px-1.5 text-xs font-semibold leading-5 text-white"
+      >
+        {pendingReceipts}
+      </span>
+    ) : null
 
   // 5 ฟีเจอร์หลักที่ staff เปิดใช้งานทุกวัน — อยู่แถวเมนูตรงๆ กดถึงเร็วที่สุด
   const STAFF_LINKS = [
@@ -51,8 +72,9 @@ export function Nav({ role, locale }: { role: string | null; locale: Locale }) {
           </Link>
           <div className="flex flex-1 flex-wrap items-center gap-x-5 gap-y-2">
             {LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className={linkClass}>
+              <Link key={link.href} href={link.href} className={`${linkClass} inline-flex items-center`}>
                 {link.label}
+                {badge(link.href)}
               </Link>
             ))}
 
@@ -120,8 +142,9 @@ export function Nav({ role, locale }: { role: string | null; locale: Locale }) {
           </summary>
           <div className="flex flex-col gap-1 border-t border-white/10 pb-2 pt-3">
             {LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className={`${linkClass} py-1.5`}>
+              <Link key={link.href} href={link.href} className={`${linkClass} inline-flex items-center py-1.5`}>
                 {link.label}
+                {badge(link.href)}
               </Link>
             ))}
             {!isVolunteer &&

@@ -1,21 +1,21 @@
 'use client'
 
 import { useId, useRef, useState } from 'react'
-import { cancelAllocation } from './actions'
+import { cancelRequest } from './actions'
 import { SubmitButton } from '../submit-button'
 
-// ยกเลิกการจัดสรร (admin หรือ staff ผู้จัดสรรเองภายใน 30 นาที) — ต้องกรอกเหตุผลก่อนยืนยัน
-// เหตุผลถูกบันทึกใน allocations.cancel_reason และแสดงในหน้าประวัติ
-// ตรวจความยาวเหตุผลเองเป็นภาษาของเว็บ (noValidate) cancel_allocation บังคับซ้ำอีกชั้น
-export function CancelAllocationButton({
+// ยกเลิกคำขอ — ต้องกรอกเหตุผล รายการจัดสรรที่ยังไม่รับของถูกยกเลิกและคืนยอดให้อัตโนมัติ
+// (cancel_request ใน docs/sql/23_f5_improvements.sql)
+// เป็นปุ่มรองโดยเจตนา ไม่ให้เด่นกว่าปุ่ม "จัดสรร" ในแถวเดียวกัน
+export function CancelRequestButton({
   id,
+  itemName,
   labels,
-  triggerClassName,
 }: {
   id: string
+  itemName: string
   labels: {
     button: string
-    title: string
     message: string
     reasonLabel: string
     reasonPlaceholder: string
@@ -24,7 +24,6 @@ export function CancelAllocationButton({
     reasonTooShort: string
     saving: string
   }
-  triggerClassName?: string
 }) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -47,10 +46,7 @@ export function CancelAllocationButton({
           setError('')
           dialogRef.current?.showModal()
         }}
-        className={
-          triggerClassName ??
-          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10'
-        }
+        className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-red-400"
       >
         {labels.button}
       </button>
@@ -60,9 +56,11 @@ export function CancelAllocationButton({
         aria-labelledby={titleId}
         className="m-auto w-full max-w-md whitespace-normal rounded-lg border border-slate-200 p-0 text-left shadow-lg backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900"
       >
-        <form action={cancelAllocation} onSubmit={handleSubmit} noValidate className="p-6">
+        <form action={cancelRequest} onSubmit={handleSubmit} noValidate className="p-6">
           <input type="hidden" name="id" value={id} />
-          <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">{labels.title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {labels.button}: {itemName}
+          </h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{labels.message}</p>
 
           <label className="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-300">

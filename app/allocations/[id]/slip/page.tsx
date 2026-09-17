@@ -26,7 +26,7 @@ export default async function AllocationSlipPage({
   const { data: allocation } = await supabase
     .from('allocations')
     .select(
-      'id, quantity_allocated, status, allocated_at, delivered_at, allocated_by_name, requests(item_name, centers(name)), donations(item_name, unit, expiry_date, centers(name))',
+      'id, quantity_allocated, received_quantity, delivery_note, status, allocated_at, delivered_at, allocated_by_name, delivered_by_name, requests(item_name, centers(name)), donations(item_name, unit, expiry_date, centers(name))',
     )
     .eq('id', id)
     .maybeSingle()
@@ -64,6 +64,16 @@ export default async function AllocationSlipPage({
     [dict.common.status, STATUS_LABEL[allocation.status] ?? allocation.status],
     [dict.allocations.deliveredAt, formatDate(allocation.delivered_at)],
   ]
+  if (allocation.status === 'delivered') {
+    rows.push(
+      [
+        dict.allocations.receivedQuantity,
+        `${allocation.received_quantity ?? allocation.quantity_allocated} ${unitLabel(don?.unit, locale)}`,
+      ],
+      [dict.allocations.deliveredBy, allocation.delivered_by_name ?? '—'],
+    )
+    if (allocation.delivery_note) rows.push([dict.allocations.deliveryNote, allocation.delivery_note])
+  }
 
   return (
     <main className="mx-auto w-full max-w-lg px-6 py-12 print:py-0">

@@ -31,26 +31,40 @@ export function RequestFilter() {
   };
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      {FILTERS.map((filter) => {
-        const isActive = (searchParams.get("category") ?? "") === filter.value;
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* ส่วนที่เพิ่มใหม่: ช่องค้นหาด้วยข้อความ (Search Query 'q') */}
+      <div className="relative w-full sm:w-72">
+        <input
+          type="text"
+          defaultValue={searchParams.get("q") ?? ""}
+          onChange={(e) => handleFilter("q", e.target.value)}
+          placeholder="ค้นหาชื่อสิ่งของ หรือศูนย์พักพิง..."
+          className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:placeholder-slate-500"
+        />
+      </div>
 
-        return (
-          <button
-            key={filter.value || "all"}
-            type="button"
-            onClick={() => handleFilter("category", filter.value)}
-            className={[
-              "rounded-full border px-3 py-1.5 text-sm transition",
-              isActive
-                ? "border-brand bg-brand text-white"
-                : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300",
-            ].join(" ")}
-          >
-            {filter.label}
-          </button>
-        );
-      })}
+      {/* ปุ่มกรองหมวดหมู่เดิมของเพื่อน */}
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((filter) => {
+          const isActive = (searchParams.get("category") ?? "") === filter.value;
+
+          return (
+            <button
+              key={filter.value || "all"}
+              type="button"
+              onClick={() => handleFilter("category", filter.value)}
+              className={[
+                "rounded-full border px-3 py-1.5 text-sm transition",
+                isActive
+                  ? "border-brand bg-brand text-white"
+                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300",
+              ].join(" ")}
+            >
+              {filter.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

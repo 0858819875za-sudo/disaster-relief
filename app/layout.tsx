@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Nav } from "./nav";
 import { PublicToggleBar } from "./public-toggle-bar";
 import { getLocale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { SiteFooter } from "./site-footer";
 
 // Sarabun เป็นฟอนต์มาตรฐานที่ใช้ในเอกสารราชการ/ทางการของไทย ใช้กับเนื้อหา/
 // ฟอร์มที่ต้องอ่านยาวๆ เพื่อสื่อความน่าเชื่อถือกับผู้อ่าน โดยเฉพาะกลุ่ม
@@ -49,13 +51,26 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   } = await supabase.auth.getUser();
 
   let role: string | null = null;
+  let pendingReceipts = 0;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, center_id")
       .eq("id", user.id)
       .single();
     role = profile?.role ?? null;
+
+    // ตัวเลข "รอรับของ" บนแถบเมนู: admin เห็นทั้งระบบ / staff และอาสาสมัคร
+    // นับเฉพาะของที่กำลังส่งมาศูนย์ตัวเอง (ศูนย์ปลายทางของคำขอ)
+    if (role === "admin" || profile?.center_id) {
+      let pending = supabase
+        .from("allocations")
+        .select("id, requests!inner(center_id)", { count: "exact", head: true })
+        .eq("status", "allocated");
+      if (role !== "admin") pending = pending.eq("requests.center_id", profile!.center_id);
+      const { count } = await pending;
+      pendingReceipts = count ?? 0;
+    }
   }
 
   const locale = await getLocale();
@@ -70,8 +85,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${sarabun.variable} ${prompt.variable} h-full antialiased${isDark ? " dark" : ""}`}
     >
       <body className="min-h-full flex flex-col bg-brand-cream dark:bg-slate-950">
-        {user ? <Nav role={role} locale={locale} /> : <PublicToggleBar locale={locale} />}
+        {user ? (
+          <Nav role={role} locale={locale} pendingReceipts={pendingReceipts} />
+        ) : (
+          <PublicToggleBar locale={locale} />
+        )}
         {children}
+        {/* ยังไม่ login = footer เต็ม (ลิงก์ประชาชน + เบอร์ติดต่อ) / login แล้ว = บรรทัดเดียว */}
+        <SiteFooter dict={getDictionary(locale)} variant={user ? "slim" : "full"} />
       </body>
     </html>
   );

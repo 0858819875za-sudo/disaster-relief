@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { translateAllocationError } from '@/lib/allocation-errors'
+import { deliveredNotice, deliveryArgs } from '@/lib/delivery-args'
+import { withNotice } from '@/lib/notice'
 
 async function errorText(message: string) {
   const dict = getDictionary(await getLocale())
@@ -19,6 +21,8 @@ function revalidateAllocationPages() {
   revalidatePath('/donations')
   revalidatePath('/inventory')
   revalidatePath('/volunteer')
+  // ตัวเลข "รอรับของ" บนแถบเมนูอยู่ใน root layout
+  revalidatePath('/', 'layout')
 }
 
 type AllocationItem = { donation_id: string; quantity: number }
@@ -58,20 +62,20 @@ export async function allocate(formData: FormData) {
   redirect('/allocations?done=' + encodeURIComponent(ids))
 }
 
+// ยืนยันรับของ + จำนวนที่ได้รับจริง — mark_delivered (docs/sql/23_f5_improvements.sql)
+// บันทึกผู้ยืนยัน และเปิดยอดที่ขาดกลับให้คำขอเมื่อได้รับไม่ครบ
 export async function confirmDelivery(formData: FormData) {
   const supabase = await createClient()
-  const { error } = await supabase.rpc('mark_delivered', {
-    p_allocation_id: String(formData.get('id')),
-  })
+  const args = deliveryArgs(formData)
+  const { error } = await supabase.rpc('mark_delivered', args)
   if (error) {
     redirect('/allocations/history?error=' + (await errorText(error.message)))
   }
   revalidateAllocationPages()
-  redirect('/allocations/history')
+  redirect(deliveredNotice('/allocations/history', formData, args.p_received))
 }
-
 // ยกเลิกการจัดสรร — คืนยอดกลับทั้งสองฝั่ง และบันทึกเหตุผลใน cancel_allocation
-// ฟังก์ชันบังคับ is_admin() และความยาวเหตุผลเองอีกชั้นแล้ว
+// ฟังก์ชันบังคับสิทธิ์ (admin หรือ staff ผู้จัดสรรเองภายใน 30 นาที) และความยาวเหตุผลเองอีกชั้นแล้ว
 export async function cancelAllocation(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase.rpc('cancel_allocation', {
@@ -82,5 +86,5 @@ export async function cancelAllocation(formData: FormData) {
     redirect('/allocations/history?error=' + (await errorText(error.message)))
   }
   revalidateAllocationPages()
-  redirect('/allocations/history')
+  redirect(withNotice('/allocations/history', 'cancelled'))
 }

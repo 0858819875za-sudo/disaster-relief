@@ -1,0 +1,38 @@
+.brand { position: absolute; top: 24px; left: 32px; }
+.panel { position: relative; }
+.hero .panel { padding: 20px 24px; }
+.panel > a { margin-bottom: 8px; }
+.panel > header { margin-bottom: 12px; }
+.panel > header h1 { margin-top: 8px; }
+.panel > header p { margin-top: 4px; }
+/* ฟอร์มอยู่กึ่งกลางจอเสมอ (ใช้ร่วมกับหน้าขอความช่วยเหลือ) — ซ้าย/ขวากว้างเท่ากัน */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 480px minmax(0, 1fr); align-items: start; gap: 40px; max-width: 1260px; width: 100%; margin-inline: auto; }
+.intro { padding-top: 44px; justify-self: end; width: 100%; max-width: 360px; }
+.intro h2 { font-size: 25px; font-weight: 700; line-height: 1.6; }
+.intro h2 span { display: block; color: #d9534f; font-size: clamp(26px, 2.5vw, 34px); }
+.intro > p { margin-top: 18px; font-size: 15px; line-height: 1.8; color: var(--muted); }
+.intro blockquote, .thanks { margin-top: 32px; font-size: 21px; font-weight: 600; line-height: 1.7; text-wrap: balance; }
+/* คำขวัญแบบลายมือ เหมือนหน้าแรก: ข้อความเอียง จัดกลาง พร้อมเส้นโค้งสีแดงใต้ข้อความ */
+.intro blockquote, .thanks { width: fit-content; max-width: 210px; text-align: center; transform: rotate(-8deg); transform-origin: left center; }
+.intro blockquote::after, .thanks::after { content: ''; display: block; width: 140px; height: 14px; margin: 8px auto 0; border-top: 4px solid #d97b72; border-radius: 50%; transform: rotate(-6deg); }
+.intro blockquote span, .thanks span { color: #d9534f; }
+.thanks { font-size: 18px; }
+.form { display: grid; gap: 10px; margin-top: 12px; }
+.form label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.form input, .form select, .form textarea { display: block; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #cedbe5; border-radius: 8px; padding: 9px 11px; font-size: 14px; background: #fff9; color: var(--ink); outline: none; }
+.form textarea { resize: vertical; }
+.form input::placeholder, .form textarea::placeholder { color: #75899c; }
+.form input:focus, .form select:focus, .form textarea:focus { border-color: #487a9c; box-shadow: 0 0 0 3px #487a9c20; }
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.notice { margin-top: 14px; padding: 12px; border-radius: 8px; background: #e5f3fc; color: #315f7c; font-size: 12px; line-height: 1.8; }
+:global(.dark) .form input, :global(.dark) .form select, :global(.dark) .form textarea { background: #102131; border-color: #465e73; }
+:global(.dark) .form input::placeholder, :global(.dark) .form textarea::placeholder { color: #93a9bc; }
+:global(.dark) .notice { background: #243e53; color: #bedbef; }
+@media (max-width: 1100px) { .layout { max-width: 850px; grid-template-columns: minmax(0, 1fr) 450px; gap: 28px; } .thanks { grid-column: 1 / -1; margin: 0 auto; transform: none; } }
+@media (max-width: 700px) { .brand { top: 20px; left: 20px; } .layout { max-width: 460px; grid-template-columns: minmax(0, 1fr); gap: 26px; } .intro { padding-top: 0; text-align: center; justify-self: stretch; max-width: none; } .intro h2 { font-size: 20px; } .intro h2 span { font-size: 28px; } .intro > p { font-size: 14px; } .intro blockquote { margin: 20px auto 0; font-size: 18px; transform: none; } .intro blockquote::after { transform: none; } .form input, .form select, .form textarea { font-size: 16px; } }
+@media (max-width: 400px) { .row { grid-template-columns: 1fr; gap: 14px; } }
+@media (min-width: 1101px) {
+  .hero.hero { height: 100svh; min-height: 0; padding: 68px 32px 16px; }
+  .layout { min-height: 0; }
+  .hero .panel { max-height: calc(100svh - 84px); overflow-y: auto; scrollbar-gutter: stable; }
+}
