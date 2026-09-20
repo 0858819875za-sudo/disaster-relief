@@ -1,8 +1,3 @@
-// =====================================================================
-// หน้ารายการคำขอความช่วยเหลือ (staff ตรวจสอบ) — มาจากฟอร์มสาธารณะ /help-request
-// เห็นเฉพาะคำขอของศูนย์ตัวเอง (RLS) / admin เห็นทุกศูนย์
-// =====================================================================
-
 import { createClient } from '@/lib/supabase/server'
 import { requireStaffOrAdmin } from '@/lib/guard'
 import { confirmHelpRequest, dismissHelpRequest } from './actions'
@@ -10,12 +5,32 @@ import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
 
+const panel = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900'
+
+// 1. ฟังก์ชันแปลงเวลาเป็น Relative Time (สร้างเมื่อ x นาที/ชม. ที่แล้ว)
+function formatRelativeTime(dateString?: string): string {
+  if (!dateString) return ''
+  const now = new Date()
+  const created = new Date(dateString)
+  const diffInSeconds = Math.floor((now.getTime() - created.getTime()) / 1000)
+
+  if (diffInSeconds < 60) return 'เมื่อสักครู่'
+  const diffInMinutes = Math.floor(diffInSeconds / 60)
+  if (diffInMinutes < 60) return `${diffInMinutes} นาทีที่แล้ว`
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `${diffInHours} ชม. ที่แล้ว`
+  const diffInDays = Math.floor(diffInHours / 24)
+  if (diffInDays < 7) return `${diffInDays} วันที่แล้ว`
+
+  return created.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+}
+
 export default async function HelpRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; status?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, status: selectedStatus = '' } = await searchParams
   const supabase = await createClient()
   await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -45,14 +60,49 @@ export default async function HelpRequestsPage({
     .from('request_pledges')
     .select('*, centers(name)')
     .order('created_at', { ascending: false })
-  const pledges = pledgeRows ? sortByUrgency(pledgeRows) : null
+  
+  const sortedPledges = pledgeRows ? sortByUrgency(pledgeRows) : null
+
+  // 2. กรองรายการตามปุ่มสถานะที่กดเลือก
+  const pledges = sortedPledges?.filter((p) => {
+    if (!selectedStatus) return true
+    if (selectedStatus === 'pending') return p.status === 'pending'
+    if (selectedStatus === 'confirmed') return p.status === 'confirmed' || p.status === 'contacted'
+    if (selectedStatus === 'dismissed') return p.status === 'dismissed'
+    return p.status === selectedStatus
+  })
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12">
-      <header className="mb-8">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
+      <header className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{dict.helpRequestQueue.title}</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{dict.helpRequestQueue.subtitle}</p>
       </header>
+
+      {/* 2. แถบปุ่มกรองสถานะ (Filter Bar) */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {[
+          { label: 'ทั้งหมด', value: '' },
+          { label: 'รอตรวจสอบ', value: 'pending' },
+          { label: 'ยืนยันแล้ว', value: 'confirmed' },
+          { label: 'ปฏิเสธ', value: 'dismissed' },
+        ].map((filter) => {
+          const isActive = selectedStatus === filter.value
+          return (
+            <a
+              key={filter.value}
+              href={filter.value ? `?status=${filter.value}` : '?'}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                isActive
+                  ? 'bg-brand text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-slate-300 hover:border-slate-400 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {filter.label}
+            </a>
+          )
+        })}
+      </div>
 
       {error && (
         <p role="alert" className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
@@ -61,83 +111,152 @@ export default async function HelpRequestsPage({
       )}
 
       {!pledges || pledges.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">
+        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">
           {dict.helpRequestQueue.noRequests}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <table className="w-full min-w-[640px] whitespace-nowrap text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-2 font-medium">{dict.helpRequestQueue.requester}</th>
-                <th className="px-4 py-2 font-medium">{dict.helpRequestQueue.center}</th>
-                <th className="px-4 py-2 font-medium">{dict.helpRequestQueue.item}</th>
-                <th className="px-4 py-2 font-medium">{dict.helpRequestQueue.quantity}</th>
-                <th className="px-4 py-2 font-medium">{dict.requests.urgency}</th>
-                <th className="px-4 py-2 font-medium">{dict.common.status}</th>
-                <th className="px-4 py-2 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pledges.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                  <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
-                    {p.requester_name}
-                    <div className="text-xs text-slate-400">{p.requester_phone}</div>
-                  </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-                    {(p.centers as unknown as { name?: string } | null)?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">
-                    {p.item_name}{' '}
-                    <span className="text-xs text-slate-400">
-                      ({CATEGORY_LABEL[p.category] ?? p.category})
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{p.quantity}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={
-                        p.urgency === 'high'
-                          ? 'rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-400'
-                          : p.urgency === 'medium'
-                            ? 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                            : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                      }
-                    >
-                      {URGENCY_LABEL[p.urgency] ?? p.urgency}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{STATUS_LABEL[p.status] ?? p.status}</td>
-                  <td className="px-4 py-2">
-                    {p.status === 'pending' && (
-                      <div className="flex gap-2">
-                        <form action={confirmHelpRequest}>
-                          <input type="hidden" name="id" value={p.id} />
-                          <button
-                            type="submit"
-                            className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
-                          >
-                            {dict.queue.confirm}
-                          </button>
-                        </form>
-                        <form action={dismissHelpRequest}>
-                          <input type="hidden" name="id" value={p.id} />
-                          <button
-                            type="submit"
-                            className="text-xs font-medium text-red-600 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            {dict.queue.dismiss}
-                          </button>
-                        </form>
-                      </div>
-                    )}
-                  </td>
+        <>
+          {/* Mobile View: การ์ดสำหรับจอเล็ก */}
+          <ul className="space-y-3 lg:hidden">
+            {pledges.map((p) => (
+              <li key={p.id} className={`${panel} p-4 space-y-3`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base">{p.requester_name}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">📞 {p.requester_phone || '—'}</p>
+                    {/* 1. แสดงเวลาแจ้งเรื่อง Relative Time */}
+                    <p className="text-[11px] text-slate-400 mt-0.5">{formatRelativeTime(p.created_at)}</p>
+                  </div>
+                  <span
+                    className={
+                      p.urgency === 'high'
+                        ? 'rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-400'
+                        : p.urgency === 'medium'
+                        ? 'rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                        : 'rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                    }
+                  >
+                    {URGENCY_LABEL[p.urgency] ?? p.urgency}
+                  </span>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-700 dark:bg-slate-800/50 dark:text-slate-300 space-y-1">
+                  <p><span className="font-medium text-slate-500">ศูนย์:</span> {(p.centers as unknown as { name?: string } | null)?.name ?? '—'}</p>
+                  <p><span className="font-medium text-slate-500">รายการ:</span> {p.item_name} ({CATEGORY_LABEL[p.category] ?? p.category})</p>
+                  <p><span className="font-medium text-slate-500">จำนวน:</span> {p.quantity}</p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="inline-block rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    {STATUS_LABEL[p.status] ?? p.status}
+                  </span>
+
+                  {p.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <form action={confirmHelpRequest}>
+                        <input type="hidden" name="id" value={p.id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-emerald-700 transition"
+                        >
+                          {dict.queue.confirm}
+                        </button>
+                      </form>
+                      <form action={dismissHelpRequest}>
+                        <input type="hidden" name="id" value={p.id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400 transition"
+                        >
+                          {dict.queue.dismiss}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop View: ตารางยืดเต็มจอ (ไม่มี Scrollbar) */}
+          <div className={`${panel} hidden overflow-hidden lg:block`}>
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">{dict.helpRequestQueue.requester}</th>
+                  <th className="px-4 py-3 font-medium">{dict.helpRequestQueue.center}</th>
+                  <th className="px-4 py-3 font-medium">{dict.helpRequestQueue.item}</th>
+                  <th className="px-4 py-3 font-medium text-center">{dict.helpRequestQueue.quantity}</th>
+                  <th className="px-4 py-3 font-medium text-center">{dict.requests.urgency}</th>
+                  <th className="px-4 py-3 font-medium text-center">{dict.common.status}</th>
+                  <th className="px-4 py-3 font-medium text-right">การดำเนินการ</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {pledges.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">
+                      <div className="font-medium">{p.requester_name}</div>
+                      <div className="text-xs text-slate-400">{p.requester_phone || '—'}</div>
+                      {/* 1. แสดงเวลาแจ้งเรื่อง Relative Time */}
+                      <div className="text-[11px] text-slate-400 mt-0.5">{formatRelativeTime(p.created_at)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      {(p.centers as unknown as { name?: string } | null)?.name ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      <span className="font-medium text-slate-900 dark:text-slate-100">{p.item_name}</span>{' '}
+                      <span className="text-xs text-slate-400">
+                        ({CATEGORY_LABEL[p.category] ?? p.category})
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300">{p.quantity}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={
+                          p.urgency === 'high'
+                            ? 'inline-block rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-400'
+                            : p.urgency === 'medium'
+                              ? 'inline-block rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                              : 'inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        }
+                      >
+                        {URGENCY_LABEL[p.urgency] ?? p.urgency}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{STATUS_LABEL[p.status] ?? p.status}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {p.status === 'pending' ? (
+                        <div className="inline-flex items-center gap-2">
+                          <form action={confirmHelpRequest}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-emerald-700 transition"
+                            >
+                              {dict.queue.confirm}
+                            </button>
+                          </form>
+                          <form action={dismissHelpRequest}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400 transition"
+                            >
+                              {dict.queue.dismiss}
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </main>
   )

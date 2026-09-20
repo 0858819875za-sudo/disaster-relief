@@ -1,11 +1,3 @@
-// =====================================================================
-// หน้ารายการคำขอ (F4) — เรียงตามความเร่งด่วน
-// staff เห็นเฉพาะศูนย์ตัวเอง / admin เห็นทุกศูนย์ (บังคับด้วย RLS)
-// แต่ละคำขอที่ยังเปิด: ปุ่มหลัก "จัดสรร" (เปิดหน้าจัดสรรพร้อมเลือกคำขอนี้) + ปุ่มรอง "ยกเลิกคำขอ"
-// ยกเลิกคำขอ (cancel_request) คืนยอดรายการจัดสรรที่ยังไม่รับของให้อัตโนมัติ
-// จอเล็กแสดงเป็นการ์ด จอใหญ่เป็นตาราง
-// =====================================================================
-
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireStaffOrAdmin } from '@/lib/guard'
@@ -26,10 +18,34 @@ const URGENCY_STYLE: Record<string, string> = {
   low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 }
 
+function formatRelativeTime(dateString: string): string {
+  if (!dateString) return ''
+
+  const now = new Date()
+  const created = new Date(dateString)
+  const diffInSeconds = Math.floor((now.getTime() - created.getTime()) / 1000)
+
+  if (diffInSeconds < 60) return 'สร้างเมื่อสักครู่'
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60)
+  if (diffInMinutes < 60) return `สร้างเมื่อ ${diffInMinutes} นาทีที่แล้ว`
+
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `สร้างเมื่อ ${diffInHours} ชม. ที่แล้ว`
+
+  const diffInDays = Math.floor(diffInHours / 24)
+  if (diffInDays < 7) return `สร้างเมื่อ ${diffInDays} วันที่แล้ว`
+
+  return created.toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; q?: string; category?: string } & NoticeParams>
+  searchParams: Promise<{ error?: string; q?: string; category?: string; urgency?: string; center_id?: string } & NoticeParams>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -57,14 +73,27 @@ export default async function RequestsPage({
     cancelled: dict.requests.statusCancelled,
   }
 
+  // 1. ดึงข้อมูลรายชื่อศูนย์พักพิงทั้งหมดเพื่อนำไปใช้ในตัวกรอง
+  const { data: centersData } = await supabase
+    .from('centers')
+    .select('id, name')
+    .order('name', { ascending: true })
+
+  // 2. ดึงข้อมูลรายการคำขอ
   const { data: requestRows } = await supabase
     .from('requests')
     .select(
-      'id, item_name, category, unit, quantity_requested, quantity_fulfilled, urgency, status, cancel_reason, created_at, centers(name)',
+      'id, item_name, category, unit, quantity_requested, quantity_fulfilled, urgency, status, cancel_reason, created_at, center_id, centers(name)',
     )
     .order('created_at', { ascending: false })
+
   const requests = requestRows ? sortByUrgency(requestRows) : null
   const notice = noticeMessage(params, dict, locale)
+
+  // คำนวณสถิติภาพรวม
+  const totalCount = requests?.length ?? 0
+  const pendingCount = requests?.filter((r) => r.status === 'pending' || r.status === 'partial').length ?? 0
+  const highUrgencyCount = requests?.filter((r) => r.urgency === 'high' && (r.status === 'pending' || r.status === 'partial')).length ?? 0
 
   const cancelLabels = {
     button: dict.requests.cancelRequest,
@@ -77,9 +106,11 @@ export default async function RequestsPage({
     saving: dict.common.saving,
   }
 
-  // ดึงค่าคำค้นหาและหมวดหมู่จาก URL เพื่อกรองข้อมูล
+  // ดึงค่าการกรองจาก URL Parameters
   const searchQuery = (params.q ?? '').toLowerCase().trim()
   const selectedCategory = params.category ?? ''
+  const selectedUrgency = params.urgency ?? ''
+  const selectedCenter = params.center_id ?? ''
 
   const filteredRequests = (requests ?? []).filter((r) => {
     const centerName = ((r.centers as unknown as { name?: string } | null)?.name ?? '').toLowerCase()
@@ -87,8 +118,10 @@ export default async function RequestsPage({
 
     const matchesSearch = !searchQuery || itemName.includes(searchQuery) || centerName.includes(searchQuery)
     const matchesCategory = !selectedCategory || r.category === selectedCategory
+    const matchesUrgency = !selectedUrgency || r.urgency === selectedUrgency
+    const matchesCenter = !selectedCenter || r.center_id === selectedCenter
 
-    return matchesSearch && matchesCategory
+    return matchesSearch && matchesCategory && matchesUrgency && matchesCenter
   })
 
   const rows = filteredRequests.map((r) => ({
@@ -156,8 +189,24 @@ export default async function RequestsPage({
         </Link>
       </header>
 
-      {/* แถบตัวกรองและช่องค้นหา */}
-      <RequestFilter />
+      {/* สถิติภาพรวม */}
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={`${panel} p-4`}>
+          <p className="text-xs text-slate-500 dark:text-slate-400">คำขอทั้งหมด</p>
+          <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">{totalCount}</p>
+        </div>
+        <div className={`${panel} p-4`}>
+          <p className="text-xs text-slate-500 dark:text-slate-400">รอการจัดสรร</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-400">{pendingCount}</p>
+        </div>
+        <div className={`${panel} p-4`}>
+          <p className="text-xs text-slate-500 dark:text-slate-400">เคสด่วนมาก (เปิดอยู่)</p>
+          <p className="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">{highUrgencyCount}</p>
+        </div>
+      </div>
+
+      {/* ตัวกรอง (ส่งรายชื่อศูนย์พักพิงที่ดึงมาจาก Supabase ไปด้วย) */}
+      <RequestFilter centers={centersData ?? []} />
 
       {params.error && (
         <ErrorDialog
@@ -171,8 +220,8 @@ export default async function RequestsPage({
       {notice && <FlashNotice key={notice} message={notice} clearHref="/requests" closeLabel={dict.allocations.close} />}
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-          {dict.requests.noRequests}
+        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          ไม่พบรายการคำขอที่ตรงกับเงื่อนไขการค้นหา
         </p>
       ) : (
         <>
@@ -185,6 +234,9 @@ export default async function RequestsPage({
                     <p className="font-medium text-slate-900 dark:text-slate-100">{row.r.item_name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {row.center} · {CATEGORY_LABEL[row.r.category] ?? row.r.category}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                      {formatRelativeTime(row.r.created_at)}
                     </p>
                   </div>
                   {urgencyPill(row)}
@@ -219,6 +271,9 @@ export default async function RequestsPage({
                       {row.r.item_name}
                       <span className="block text-xs text-slate-500 dark:text-slate-400">
                         {CATEGORY_LABEL[row.r.category] ?? row.r.category}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-slate-400 dark:text-slate-500">
+                        {formatRelativeTime(row.r.created_at)}
                       </span>
                     </td>
                     <td className="px-4 py-3">{progress(row)}</td>
