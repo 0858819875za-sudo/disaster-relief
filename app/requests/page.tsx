@@ -8,38 +8,14 @@ import { unitLabel } from '@/lib/units'
 import { noticeMessage, type NoticeParams } from '@/lib/notice'
 import { ErrorDialog } from '../allocations/error-dialog'
 import { FlashNotice } from '../flash-notice'
-import { CancelRequestButton } from './cancel-request-dialog'
 import { RequestFilter } from './request-filter'
+import { RequestList } from './request-list'
 
 const panel = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900'
 const URGENCY_STYLE: Record<string, string> = {
   high: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400',
   medium: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
   low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-}
-
-function formatRelativeTime(dateString: string): string {
-  if (!dateString) return ''
-
-  const now = new Date()
-  const created = new Date(dateString)
-  const diffInSeconds = Math.floor((now.getTime() - created.getTime()) / 1000)
-
-  if (diffInSeconds < 60) return 'สร้างเมื่อสักครู่'
-
-  const diffInMinutes = Math.floor(diffInSeconds / 60)
-  if (diffInMinutes < 60) return `สร้างเมื่อ ${diffInMinutes} นาทีที่แล้ว`
-
-  const diffInHours = Math.floor(diffInMinutes / 60)
-  if (diffInHours < 24) return `สร้างเมื่อ ${diffInHours} ชม. ที่แล้ว`
-
-  const diffInDays = Math.floor(diffInHours / 24)
-  if (diffInDays < 7) return `สร้างเมื่อ ${diffInDays} วันที่แล้ว`
-
-  return created.toLocaleDateString('th-TH', {
-    day: 'numeric',
-    month: 'short',
-  })
 }
 
 export default async function RequestsPage({
@@ -73,7 +49,7 @@ export default async function RequestsPage({
     cancelled: dict.requests.statusCancelled,
   }
 
-  // 1. ดึงข้อมูลรายชื่อศูนย์พักพิงทั้งหมดเพื่อนำไปใช้ในตัวกรอง
+  // 1. ดึงข้อมูลรายชื่อศูนย์พักพิงทั้งหมด
   const { data: centersData } = await supabase
     .from('centers')
     .select('id, name')
@@ -131,48 +107,6 @@ export default async function RequestsPage({
     open: r.status === 'pending' || r.status === 'partial',
     percent: r.quantity_requested > 0 ? Math.min(100, Math.round((r.quantity_fulfilled / r.quantity_requested) * 100)) : 0,
   }))
-  type Row = (typeof rows)[number]
-
-  const progress = (row: Row) => (
-    <div className="min-w-[120px]">
-      <p className="tabular-nums text-slate-700 dark:text-slate-300">
-        {row.r.quantity_fulfilled} / {row.r.quantity_requested} {row.unit}
-      </p>
-      <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <span className="block h-full rounded-full bg-sky-600 dark:bg-sky-400" style={{ width: `${row.percent}%` }} />
-      </span>
-    </div>
-  )
-
-  const statusCell = (row: Row) => (
-    <>
-      <span className="whitespace-nowrap text-slate-700 dark:text-slate-300">{STATUS_LABEL[row.r.status] ?? row.r.status}</span>
-      {row.r.status === 'cancelled' && row.r.cancel_reason && (
-        <span className="mt-1 block max-w-[240px] whitespace-normal text-xs text-slate-500 dark:text-slate-400">
-          {dict.requests.cancelledReason}: {row.r.cancel_reason}
-        </span>
-      )}
-    </>
-  )
-
-  const actions = (row: Row) =>
-    row.open ? (
-      <div className="flex flex-wrap items-center gap-1">
-        <Link
-          href={`/allocations?request=${row.r.id}`}
-          className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
-        >
-          {dict.requests.allocateAction}
-        </Link>
-        <CancelRequestButton id={row.r.id} itemName={row.r.item_name} labels={cancelLabels} />
-      </div>
-    ) : null
-
-  const urgencyPill = (row: Row) => (
-    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${URGENCY_STYLE[row.r.urgency] ?? URGENCY_STYLE.low}`}>
-      {URGENCY_LABEL[row.r.urgency] ?? row.r.urgency}
-    </span>
-  )
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
@@ -205,7 +139,7 @@ export default async function RequestsPage({
         </div>
       </div>
 
-      {/* ตัวกรอง (ส่งรายชื่อศูนย์พักพิงที่ดึงมาจาก Supabase ไปด้วย) */}
+      {/* ตัวกรอง */}
       <RequestFilter centers={centersData ?? []} />
 
       {params.error && (
@@ -224,68 +158,15 @@ export default async function RequestsPage({
           ไม่พบรายการคำขอที่ตรงกับเงื่อนไขการค้นหา
         </p>
       ) : (
-        <>
-          {/* จอเล็ก: การ์ด */}
-          <ul className="space-y-3 md:hidden">
-            {rows.map((row) => (
-              <li key={row.r.id} className={`${panel} p-4`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-slate-900 dark:text-slate-100">{row.r.item_name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {row.center} · {CATEGORY_LABEL[row.r.category] ?? row.r.category}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
-                      {formatRelativeTime(row.r.created_at)}
-                    </p>
-                  </div>
-                  {urgencyPill(row)}
-                </div>
-                <div className="mt-3 text-sm">{progress(row)}</div>
-                <div className="mt-2 text-sm">{statusCell(row)}</div>
-                {row.open && <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">{actions(row)}</div>}
-              </li>
-            ))}
-          </ul>
-
-          {/* จอใหญ่: ตาราง */}
-          <div className={`${panel} hidden overflow-x-auto md:block`}>
-            <table className="w-full min-w-[880px] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                <tr>
-                  <th className="px-4 py-2.5 font-medium">{dict.requests.center}</th>
-                  <th className="px-4 py-2.5 font-medium">{dict.requests.item}</th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {dict.requests.fulfilled} / {dict.requests.requested}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">{dict.requests.urgency}</th>
-                  <th className="px-4 py-2.5 font-medium">{dict.common.status}</th>
-                  <th className="px-4 py-2.5 font-medium">{dict.requests.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.r.id} className="border-b border-slate-100 align-top last:border-0 dark:border-slate-800">
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.center}</td>
-                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">
-                      {row.r.item_name}
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">
-                        {CATEGORY_LABEL[row.r.category] ?? row.r.category}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] text-slate-400 dark:text-slate-500">
-                        {formatRelativeTime(row.r.created_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">{progress(row)}</td>
-                    <td className="px-4 py-3">{urgencyPill(row)}</td>
-                    <td className="px-4 py-3">{statusCell(row)}</td>
-                    <td className="px-4 py-3">{actions(row)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <RequestList
+          rows={rows}
+          dict={dict}
+          categoryLabel={CATEGORY_LABEL}
+          urgencyLabel={URGENCY_LABEL}
+          urgencyStyle={URGENCY_STYLE}
+          statusLabel={STATUS_LABEL}
+          cancelLabels={cancelLabels}
+        />
       )}
     </main>
   )

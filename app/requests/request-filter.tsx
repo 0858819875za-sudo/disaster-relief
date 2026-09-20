@@ -1,15 +1,16 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const CATEGORY_FILTERS = [
   { label: "ทั้งหมด", value: "" },
-  { label: "อาหาร", value: "food" },
-  { label: "น้ำ", value: "water" },
-  { label: "ยา", value: "medicine" },
-  { label: "เสื้อผ้า", value: "clothing" },
-  { label: "สุขอนามัย", value: "hygiene" },
-  { label: "อื่น ๆ", value: "other" },
+  { label: "🍞 อาหาร", value: "food" },
+  { label: "💧 น้ำ", value: "water" },
+  { label: "💊 ยา", value: "medicine" },
+  { label: "👕 เสื้อผ้า", value: "clothing" },
+  { label: "🧴 สุขอนามัย", value: "hygiene" },
+  { label: "📦 อื่น ๆ", value: "other" },
 ];
 
 const URGENCY_FILTERS = [
@@ -23,7 +24,7 @@ interface RequestFilterProps {
   centers?: { id: string; name: string }[];
 }
 
-export function RequestFilter({ centers = [] }: RequestFilterProps) {
+function RequestFilterContent({ centers = [] }: RequestFilterProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { replace } = useRouter();
@@ -32,6 +33,11 @@ export function RequestFilter({ centers = [] }: RequestFilterProps) {
   const currentCategory = searchParams.get("category") ?? "";
   const currentUrgency = searchParams.get("urgency") ?? "";
   const currentCenter = searchParams.get("center_id") ?? "";
+
+  // ตรวจสอบว่ามีการใช้ตัวกรองอยู่หรือไม่
+  const isFiltered = Boolean(
+    currentSearch || currentCategory || currentUrgency || currentCenter
+  );
 
   const handleFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -46,17 +52,25 @@ export function RequestFilter({ centers = [] }: RequestFilterProps) {
     replace(query ? `${pathname}?${query}` : pathname);
   };
 
+  // ฟังก์ชันล้างตัวกรองทั้งหมด
+  const handleReset = () => {
+    replace(pathname);
+  };
+
   return (
     <div className="mb-6 space-y-3">
-      {/* แถบค้นหา + ตัวกรองศูนย์พักพิง + ตัวกรองความเร่งด่วน */}
+      {/* แถบค้นหา + ตัวกรองศูนย์พักพิง + ตัวกรองความเร่งด่วน + ปุ่มล้างตัวกรอง */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
-          type="text"
-          value={currentSearch}
-          onChange={(e) => handleFilter("q", e.target.value)}
-          placeholder="ค้นหาชื่อสิ่งของ..."
-          className="w-full sm:w-72 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-        />
+        {/* ช่องค้นหา */}
+        <div className="relative w-full sm:w-72">
+          <input
+            type="text"
+            value={currentSearch}
+            onChange={(e) => handleFilter("q", e.target.value)}
+            placeholder="ค้นหาชื่อสิ่งของ..."
+            className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          />
+        </div>
 
         {/* ตัวกรองศูนย์พักพิง */}
         <select
@@ -84,6 +98,17 @@ export function RequestFilter({ centers = [] }: RequestFilterProps) {
             </option>
           ))}
         </select>
+
+        {/* ปุ่มล้างตัวกรอง (จะแสดงเฉพาะเมื่อมีการกรองค้างอยู่) */}
+        {isFiltered && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-200 hover:text-slate-800 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white"
+          >
+            ✕ ล้างตัวกรอง
+          </button>
+        )}
       </div>
 
       {/* ปุ่มเลือกหมวดหมู่ */}
@@ -109,5 +134,13 @@ export function RequestFilter({ centers = [] }: RequestFilterProps) {
         })}
       </div>
     </div>
+  );
+}
+
+export function RequestFilter(props: RequestFilterProps) {
+  return (
+    <Suspense fallback={<div className="mb-6 h-20 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />}>
+      <RequestFilterContent {...props} />
+    </Suspense>
   );
 }

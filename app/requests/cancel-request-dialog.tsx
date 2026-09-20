@@ -4,6 +4,17 @@ import { useId, useRef, useState } from 'react'
 import { cancelRequest } from './actions'
 import { SubmitButton } from '../submit-button'
 
+export type CancelRequestButtonLabels = {
+  button: string
+  message: string
+  reasonLabel: string
+  reasonPlaceholder: string
+  back: string
+  submit: string
+  reasonTooShort: string
+  saving: string
+}
+
 // ยกเลิกคำขอ — ต้องกรอกเหตุผล รายการจัดสรรที่ยังไม่รับของถูกยกเลิกและคืนยอดให้อัตโนมัติ
 // (cancel_request ใน docs/sql/23_f5_improvements.sql)
 // เป็นปุ่มรองโดยเจตนา ไม่ให้เด่นกว่าปุ่ม "จัดสรร" ในแถวเดียวกัน
@@ -14,16 +25,7 @@ export function CancelRequestButton({
 }: {
   id: string
   itemName: string
-  labels: {
-    button: string
-    message: string
-    reasonLabel: string
-    reasonPlaceholder: string
-    back: string
-    submit: string
-    reasonTooShort: string
-    saving: string
-  }
+  labels: CancelRequestButtonLabels
 }) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)

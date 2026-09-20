@@ -4,10 +4,10 @@ import { confirmHelpRequest, dismissHelpRequest } from './actions'
 import { getLocale } from '@/lib/i18n/locale'
 import { getDictionary } from '@/lib/i18n/dictionaries'
 import { sortByUrgency } from '@/lib/urgency'
+import RequestFilter from './request-filter'
 
 const panel = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900'
 
-// 1. ฟังก์ชันแปลงเวลาเป็น Relative Time (สร้างเมื่อ x นาที/ชม. ที่แล้ว)
 function formatRelativeTime(dateString?: string): string {
   if (!dateString) return ''
   const now = new Date()
@@ -28,9 +28,22 @@ function formatRelativeTime(dateString?: string): string {
 export default async function HelpRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; status?: string }>
+  searchParams: Promise<{ 
+    error?: string; 
+    status?: string;
+    search?: string;
+    center?: string;
+    urgency?: string;
+  }>
 }) {
-  const { error, status: selectedStatus = '' } = await searchParams
+  const { 
+    error, 
+    status: selectedStatus = '',
+    search = '',
+    center: selectedCenter = '',
+    urgency: selectedUrgency = ''
+  } = await searchParams
+
   const supabase = await createClient()
   await requireStaffOrAdmin(supabase)
   const locale = await getLocale()
@@ -56,21 +69,51 @@ export default async function HelpRequestsPage({
     dismissed: dict.queue.statusDismissed,
   }
 
+  const { data: centerRows } = await supabase.from('centers').select('id, name')
+  const centers = centerRows || []
+
   const { data: pledgeRows } = await supabase
     .from('request_pledges')
     .select('*, centers(name)')
     .order('created_at', { ascending: false })
   
-  const sortedPledges = pledgeRows ? sortByUrgency(pledgeRows) : null
+  const sortedPledges = pledgeRows ? sortByUrgency(pledgeRows) : []
 
-  // 2. กรองรายการตามปุ่มสถานะที่กดเลือก
-  const pledges = sortedPledges?.filter((p) => {
-    if (!selectedStatus) return true
-    if (selectedStatus === 'pending') return p.status === 'pending'
-    if (selectedStatus === 'confirmed') return p.status === 'confirmed' || p.status === 'contacted'
-    if (selectedStatus === 'dismissed') return p.status === 'dismissed'
-    return p.status === selectedStatus
+  // คำนวณจำนวนรายการในแต่ละสถานะ (สำหรับ Badge Counter)
+  const counts = {
+    all: sortedPledges.length,
+    pending: sortedPledges.filter((p) => p.status === 'pending').length,
+    confirmed: sortedPledges.filter((p) => p.status === 'confirmed' || p.status === 'contacted').length,
+    dismissed: sortedPledges.filter((p) => p.status === 'dismissed').length,
+  }
+
+  // กรองรายการตามสถานะ และการค้นหา
+  const pledges = sortedPledges.filter((p) => {
+    if (selectedStatus === 'pending' && p.status !== 'pending') return false
+    if (selectedStatus === 'confirmed' && p.status !== 'confirmed' && p.status !== 'contacted') return false
+    if (selectedStatus === 'dismissed' && p.status !== 'dismissed') return false
+    if (selectedStatus && !['pending', 'confirmed', 'dismissed'].includes(selectedStatus) && p.status !== selectedStatus) return false
+
+    if (search) {
+      const query = search.toLowerCase()
+      const nameMatch = p.requester_name?.toLowerCase().includes(query)
+      const phoneMatch = p.requester_phone?.toLowerCase().includes(query)
+      if (!nameMatch && !phoneMatch) return false
+    }
+
+    if (selectedCenter && p.center_id !== selectedCenter) return false
+
+    if (selectedUrgency && p.urgency?.toLowerCase() !== selectedUrgency.toLowerCase()) return false
+
+    return true
   })
+
+  const filterTabs = [
+    { label: 'ทั้งหมด', value: '', count: counts.all },
+    { label: 'รอตรวจสอบ', value: 'pending', count: counts.pending },
+    { label: 'ยืนยันแล้ว', value: 'confirmed', count: counts.confirmed },
+    { label: 'ปฏิเสธ', value: 'dismissed', count: counts.dismissed },
+  ]
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
@@ -79,30 +122,38 @@ export default async function HelpRequestsPage({
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{dict.helpRequestQueue.subtitle}</p>
       </header>
 
-      {/* 2. แถบปุ่มกรองสถานะ (Filter Bar) */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {[
-          { label: 'ทั้งหมด', value: '' },
-          { label: 'รอตรวจสอบ', value: 'pending' },
-          { label: 'ยืนยันแล้ว', value: 'confirmed' },
-          { label: 'ปฏิเสธ', value: 'dismissed' },
-        ].map((filter) => {
+      {/* แถบปุ่มกรองสถานะพร้อม Badge Counter แสดงจำนวน */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {filterTabs.map((filter) => {
           const isActive = selectedStatus === filter.value
           return (
             <a
               key={filter.value}
               href={filter.value ? `?status=${filter.value}` : '?'}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+              className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                 isActive
                   ? 'bg-brand text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-300 hover:border-slate-400 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
               }`}
             >
-              {filter.label}
+              <span>{filter.label}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : filter.value === 'pending' && filter.count > 0
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                }`}
+              >
+                {filter.count}
+              </span>
             </a>
           )
         })}
       </div>
+
+      <RequestFilter centers={centers} />
 
       {error && (
         <p role="alert" className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
@@ -116,7 +167,6 @@ export default async function HelpRequestsPage({
         </p>
       ) : (
         <>
-          {/* Mobile View: การ์ดสำหรับจอเล็ก */}
           <ul className="space-y-3 lg:hidden">
             {pledges.map((p) => (
               <li key={p.id} className={`${panel} p-4 space-y-3`}>
@@ -124,7 +174,6 @@ export default async function HelpRequestsPage({
                   <div>
                     <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base">{p.requester_name}</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">📞 {p.requester_phone || '—'}</p>
-                    {/* 1. แสดงเวลาแจ้งเรื่อง Relative Time */}
                     <p className="text-[11px] text-slate-400 mt-0.5">{formatRelativeTime(p.created_at)}</p>
                   </div>
                   <span
@@ -178,7 +227,6 @@ export default async function HelpRequestsPage({
             ))}
           </ul>
 
-          {/* Desktop View: ตารางยืดเต็มจอ (ไม่มี Scrollbar) */}
           <div className={`${panel} hidden overflow-hidden lg:block`}>
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
@@ -198,7 +246,6 @@ export default async function HelpRequestsPage({
                     <td className="px-4 py-3 text-slate-900 dark:text-slate-100">
                       <div className="font-medium">{p.requester_name}</div>
                       <div className="text-xs text-slate-400">{p.requester_phone || '—'}</div>
-                      {/* 1. แสดงเวลาแจ้งเรื่อง Relative Time */}
                       <div className="text-[11px] text-slate-400 mt-0.5">{formatRelativeTime(p.created_at)}</div>
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
